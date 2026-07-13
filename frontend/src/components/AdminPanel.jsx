@@ -39,6 +39,10 @@ function parseList(value) {
   return [...new Set(String(value || "").split(",").map((item) => item.trim()).filter(Boolean))];
 }
 
+function canvasToWebp(canvas, quality) {
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/webp", quality));
+}
+
 async function optimizeProductImage(file) {
   if (!file || !["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Usa una imagen JPG, PNG o WebP.");
   if (file.size > 25 * 1024 * 1024) throw new Error("La imagen original no puede superar 25 MB.");
@@ -59,13 +63,30 @@ async function optimizeProductImage(file) {
     }
     const sourceWidth = source.width || source.naturalWidth;
     const sourceHeight = source.height || source.naturalHeight;
-    const scale = Math.min(1, 1600 / Math.max(sourceWidth, sourceHeight));
-    const canvas = document.createElement("canvas");
+    const scale = Math.min(1, 1280 / Math.max(sourceWidth, sourceHeight));
+    let canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(sourceWidth * scale));
     canvas.height = Math.max(1, Math.round(sourceHeight * scale));
     const context = canvas.getContext("2d", { alpha: true });
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
     context.drawImage(source, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", .84));
+    let blob = await canvasToWebp(canvas, .78);
+    const targetBytes = 700 * 1024;
+    while (blob?.size > targetBytes && Math.max(canvas.width, canvas.height) > 720) {
+      const reduced = document.createElement("canvas");
+      reduced.width = Math.max(1, Math.round(canvas.width * .82));
+      reduced.height = Math.max(1, Math.round(canvas.height * .82));
+      const reducedContext = reduced.getContext("2d", { alpha: true });
+      reducedContext.imageSmoothingEnabled = true;
+      reducedContext.imageSmoothingQuality = "high";
+      reducedContext.drawImage(canvas, 0, 0, reduced.width, reduced.height);
+      canvas.width = 1;
+      canvas.height = 1;
+      canvas = reduced;
+      blob = await canvasToWebp(canvas, .7);
+    }
+    if (blob?.size > targetBytes) blob = await canvasToWebp(canvas, .58);
     if (!blob) throw new Error("No se pudo optimizar la imagen.");
     return await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -144,6 +165,7 @@ function Login({ onLogin, notice }) {
 function ProductEditor({ product, onSave, onClose, onUpload, collectionOptions, categoryOptions }) {
   const [form, setForm] = useState(() => editorForm(product));
   const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -243,14 +265,16 @@ function ProductEditor({ product, onSave, onClose, onUpload, collectionOptions, 
     const file = event.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setUploadStatus("Optimizando imagen...");
     setUploadError("");
     try {
-      const imageUrl = await onUpload(file);
+      const imageUrl = await onUpload(file, () => setUploadStatus("Subiendo imagen optimizada..."));
       update("image", imageUrl);
     } catch (error) {
       setUploadError(error.message || "No se pudo subir la imagen");
     } finally {
       setUploading(false);
+      setUploadStatus("");
     }
   }
 
@@ -287,8 +311,8 @@ function ProductEditor({ product, onSave, onClose, onUpload, collectionOptions, 
             <div className="admin-image-upload">
               <SafeImage src={form.image} alt="Vista previa del producto" loading="eager" />
               <div>
-                <h3>{uploading ? "Subiendo imagen..." : "Sube una foto propia"}</h3>
-                <p>JPG, PNG o WebP de hasta 25 MB. La imagen se optimiza automáticamente antes de subirla.</p>
+                <h3>{uploading ? uploadStatus : "Sube una foto propia"}</h3>
+                <p>JPG, PNG o WebP de hasta 25 MB. Se reduce a un formato ligero antes de enviarse para acelerar la carga.</p>
                 <label className="button button-ghost"><Icon name="upload" /> Elegir fotografía<input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadImage} disabled={uploading} /></label>
                 {uploadError && <span className="admin-error">{uploadError}</span>}
               </div>
@@ -336,6 +360,72 @@ function ProductEditor({ product, onSave, onClose, onUpload, collectionOptions, 
   );
 }
 
+function OrderDetails({ order, onClose }) {
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    const previouslyFocused = document.activeElement;
+    document.body.classList.add("modal-open");
+    function closeWithEscape(event) {
+      if (event.key === "Escape") onCloseRef.current();
+    }
+    window.addEventListener("keydown", closeWithEscape);
+    return () => {
+      document.body.classList.remove("modal-open");
+      window.removeEventListener("keydown", closeWithEscape);
+      previouslyFocused?.focus?.();
+    };
+  }, []);
+
+  return (
+    <div className="admin-modal-backdrop" onMouseDown={onClose}>
+      <section className="admin-order-detail" role="dialog" aria-modal="true" aria-labelledby="order-detail-title" onMouseDown={(event) => event.stopPropagation()}>
+        <header className="admin-editor-head">
+          <div><span className="admin-kicker">Detalle del pedido</span><h2 id="order-detail-title">{order.id}</h2></div>
+          <button type="button" className="round-button" onClick={onClose} aria-label="Cerrar detalle del pedido"><Icon name="close" /></button>
+        </header>
+        <div className="admin-order-detail-body">
+          <div className="order-detail-summary">
+            <article><span>Estado</span><strong className={`order-pill ${order.status}`}>{order.status}</strong></article>
+            <article><span>Fecha</span><strong>{new Date(order.createdAt).toLocaleString("es-MX")}</strong></article>
+            <article><span>Total</span><strong>{money(order.total)}</strong></article>
+          </div>
+          <section className="order-detail-section">
+            <div className="order-detail-section-title"><span>01</span><div><h3>Información del cliente</h3><p>Datos de contacto, entrega y pago.</p></div></div>
+            <div className="order-detail-customer">
+              <div><span>Nombre</span><strong>{order.customer.name}</strong></div>
+              <div><span>Instagram</span><strong>{order.customer.instagram || "No indicado"}</strong></div>
+              <div><span>Ciudad</span><strong>{order.customer.city}</strong></div>
+              <div><span>Entrega</span><strong>{order.customer.delivery}</strong></div>
+              <div><span>Pago</span><strong>{order.customer.payment}</strong></div>
+              <div className="wide"><span>Notas del cliente</span><strong>{order.customer.notes || "Sin notas adicionales"}</strong></div>
+            </div>
+          </section>
+          <section className="order-detail-section">
+            <div className="order-detail-section-title"><span>02</span><div><h3>Productos solicitados</h3><p>{order.items.length} producto(s) en este pedido.</p></div></div>
+            <div className="order-detail-items">
+              {order.items.map((item) => (
+                <article key={`${order.id}-${item.productId}-${item.size}-${item.color}`}>
+                  <SafeImage src={item.image} alt={item.name} loading="eager" />
+                  <div className="order-detail-product">
+                    <span>{item.collection || "UTOY DROP"}</span>
+                    <strong>{item.name}</strong>
+                    <small>{item.option1Label || "Talla"}: {item.size} &middot; {item.option2Label || "Color"}: {item.color}</small>
+                  </div>
+                  <div className="order-detail-quantity"><span>Cantidad</span><strong>{item.quantity}</strong></div>
+                  <div className="order-detail-price"><span>Subtotal</span><strong>{money(item.price * item.quantity)}</strong><small>{money(item.price)} c/u</small></div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+        <footer className="admin-editor-actions"><button className="button" type="button" onClick={onClose}>Cerrar detalle <Icon name="check" /></button></footer>
+      </section>
+    </div>
+  );
+}
+
 export function AdminPanel({ products, categories = [], collections = [], onProductsChange, onCategoriesChange, onCollectionsChange }) {
   const [authenticated, setAuthenticated] = useState(null);
   const [loginNotice, setLoginNotice] = useState("");
@@ -344,6 +434,7 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
   const [editorOpen, setEditorOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [orders, setOrders] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [activeView, setActiveView] = useState("overview");
   const [orderFilter, setOrderFilter] = useState("todos");
@@ -486,8 +577,9 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
     return true;
   }
 
-  async function uploadProductImage(file) {
+  async function uploadProductImage(file, onOptimized) {
     const image = await optimizeProductImage(file);
+    onOptimized?.();
     const response = await fetch("/api/admin/upload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -615,6 +707,7 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
     if (!response.ok) return;
     const updated = await response.json();
     setOrders((current) => current.map((order) => order.id === id ? updated : order));
+    setSelectedOrder((current) => current?.id === id ? updated : current);
     setNotice("Pedido actualizado");
     window.setTimeout(() => setNotice(""), 2200);
   }
@@ -821,7 +914,7 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
                         <option value="cancelado">Cancelado</option>
                       </select>
                     </td>
-                    <td><div className="admin-actions"><button className="danger" type="button" onClick={() => removeOrder(order)} aria-label={`Eliminar pedido ${order.id}`} title="Eliminar pedido"><Icon name="trash" /></button></div></td>
+                    <td><div className="admin-actions"><button type="button" onClick={() => setSelectedOrder(order)} aria-label={`Ver pedido ${order.id}`} title="Ver información del pedido"><Icon name="eye" /></button><button className="danger" type="button" onClick={() => removeOrder(order)} aria-label={`Eliminar pedido ${order.id}`} title="Eliminar pedido"><Icon name="trash" /></button></div></td>
                   </tr>
                 ))}
                 {!filteredOrders.length && (
@@ -833,6 +926,7 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
         </section>}
       </section>
       {editorOpen && <ProductEditor product={editorProduct} categoryOptions={categoryOptions} collectionOptions={collectionOptions} onSave={saveProduct} onClose={closeEditor} onUpload={uploadProductImage} />}
+      {selectedOrder && <OrderDetails order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
       {notice && <div className="toast"><Icon name="check" /> {notice}</div>}
     </main>
   );
