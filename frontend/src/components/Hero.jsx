@@ -78,7 +78,7 @@ export function Hero({ productCount = 0 }) {
       <div className="shell hero-grid">
         <div className="hero-copy">
           <div className="eyebrow"><span /> {productCount > 0 ? "Drop activo" : "Próximo drop"} <b>{productCount > 0 ? "Stock limitado" : "En preparación"}</b></div>
-          <h1>TU ESTILO.<br /><em>TUS REGLAS.</em></h1>
+          <h1>EN GUSTOS SE<br /><em>ROMPEN GÉNEROS.</em></h1>
           <p>
             Moda, accesorios y productos seleccionados para tu estilo, con pedido directo por Instagram.
           </p>
