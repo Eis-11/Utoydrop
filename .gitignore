@@ -1,0 +1,15 @@
+node_modules/
+frontend/dist/
+coverage/
+.vite/
+*.log
+*.tmp
+.env
+backend/.env
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/data/orders.json
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

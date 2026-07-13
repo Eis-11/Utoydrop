@@ -1,0 +1,28 @@
+{
+  "name": "utoy_shop_project",
+  "version": "1.0.0",
+  "description": "Catálogo y gestión de pedidos de UTOY DROP",
+  "main": "index.js",
+  "scripts": {
+    "dev": "pnpm --filter utoy-drop-catalog dev",
+    "build": "pnpm --filter utoy-drop-catalog build",
+    "preview": "pnpm --filter utoy-drop-catalog preview",
+    "backend": "pnpm --filter utoy-shop-backend start",
+    "serve": "node backend/index.js",
+    "test": "pnpm run build && pnpm --filter utoy-shop-backend test",
+    "check": "pnpm --filter utoy-shop-backend check"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.7.0"
+}
