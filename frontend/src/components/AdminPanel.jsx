@@ -120,7 +120,7 @@ function Login({ onLogin, notice }) {
       <section className="admin-login-card">
         <a className="admin-logo" href="#inicio"><img src="/img/logo-utoy-drop-hero.jpg" alt="UTOY DROP" /></a>
         <span className="admin-kicker">Panel privado</span>
-        <h1>ADMINISTRA<br /><em>EL DROP.</em></h1>
+        <h1>ADMINISTRADOR<br /><em>DE UTOY DROP.</em></h1>
         <p>Gestiona catálogo, precios, inventario y visibilidad desde un solo lugar.</p>
         {notice && <span className="admin-error">{notice}</span>}
         <form onSubmit={submit}>

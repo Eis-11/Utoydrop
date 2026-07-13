@@ -420,7 +420,7 @@ button:disabled { cursor: not-allowed; }
 .admin-logo { display: block; width: 78px; margin-bottom: 35px; overflow: hidden; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; }
 .admin-logo img { width: 100%; }
 .admin-kicker { display: block; margin-bottom: 10px; color: #777; font-size: .55rem; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; }
-.admin-login h1 { margin: 0; font: 400 clamp(2.6rem, 8vw, 4.2rem)/.9 "Archivo Black"; letter-spacing: -.07em; }
+.admin-login h1 { margin: 0; font: 400 clamp(1.95rem, 7.8vw, 2.65rem)/.94 "Archivo Black"; letter-spacing: -.06em; }
 .admin-login h1 em { color: transparent; font-style: normal; -webkit-text-stroke: 1px #777; }
 .admin-login p { margin: 20px 0 27px; color: #888; font-size: .77rem; line-height: 1.7; }
 .admin-login form { display: grid; gap: 12px; }
