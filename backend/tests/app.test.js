@@ -1,6 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { once } = require("node:events");
+const fs = require("node:fs/promises");
+const os = require("node:os");
+const path = require("node:path");
 const { createApp, validateCatalog, validateCategories, validateCollections } = require("../src/app");
 
 class MemoryRepository {
@@ -194,6 +197,28 @@ test("rechaza archivos disfrazados como imágenes", async () => withServer(async
   });
   assert.equal(response.status, 400);
 }));
+
+test("recibe imágenes WebP optimizadas sin convertirlas a Base64", async () => {
+  const uploadsDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "utoy-upload-"));
+  try {
+    await withServer(async (baseUrl) => {
+      const login = await fetch(`${baseUrl}/api/admin/login`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: "test-password" }),
+      });
+      const cookie = login.headers.get("set-cookie").split(";")[0];
+      const webp = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x04, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+      const response = await fetch(`${baseUrl}/api/admin/upload`, {
+        method: "POST", headers: { "Content-Type": "image/webp", Cookie: cookie }, body: webp,
+      });
+      const result = await response.json();
+      assert.equal(response.status, 200);
+      assert.match(result.url, /^\/uploads\/[A-Za-z0-9-]+\.webp$/);
+      assert.equal((await fs.readFile(path.join(uploadsDirectory, path.basename(result.url)))).length, webp.length);
+    }, { uploadsDirectory });
+  } finally {
+    await fs.rm(uploadsDirectory, { recursive: true, force: true });
+  }
+});
 
 test("limita intentos repetidos de contraseña", async () => withServer(async (baseUrl) => {
   let response;

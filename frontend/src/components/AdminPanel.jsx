@@ -63,7 +63,7 @@ async function optimizeProductImage(file) {
     }
     const sourceWidth = source.width || source.naturalWidth;
     const sourceHeight = source.height || source.naturalHeight;
-    const scale = Math.min(1, 1280 / Math.max(sourceWidth, sourceHeight));
+    const scale = Math.min(1, 1100 / Math.max(sourceWidth, sourceHeight));
     let canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(sourceWidth * scale));
     canvas.height = Math.max(1, Math.round(sourceHeight * scale));
@@ -71,9 +71,9 @@ async function optimizeProductImage(file) {
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = "high";
     context.drawImage(source, 0, 0, canvas.width, canvas.height);
-    let blob = await canvasToWebp(canvas, .78);
-    const targetBytes = 700 * 1024;
-    while (blob?.size > targetBytes && Math.max(canvas.width, canvas.height) > 720) {
+    let blob = await canvasToWebp(canvas, .76);
+    const targetBytes = 220 * 1024;
+    while (blob?.size > targetBytes && Math.max(canvas.width, canvas.height) > 620) {
       const reduced = document.createElement("canvas");
       reduced.width = Math.max(1, Math.round(canvas.width * .82));
       reduced.height = Math.max(1, Math.round(canvas.height * .82));
@@ -84,16 +84,11 @@ async function optimizeProductImage(file) {
       canvas.width = 1;
       canvas.height = 1;
       canvas = reduced;
-      blob = await canvasToWebp(canvas, .7);
+      blob = await canvasToWebp(canvas, .66);
     }
     if (blob?.size > targetBytes) blob = await canvasToWebp(canvas, .58);
     if (!blob) throw new Error("No se pudo optimizar la imagen.");
-    return await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error("No se pudo leer la imagen optimizada."));
-      reader.readAsDataURL(blob);
-    });
+    return blob;
   } finally {
     source?.close?.();
     if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -582,8 +577,8 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
     onOptimized?.();
     const response = await fetch("/api/admin/upload", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image }),
+      headers: { "Content-Type": image.type },
+      body: image,
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message);

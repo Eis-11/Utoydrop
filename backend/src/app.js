@@ -244,13 +244,18 @@ function createApp({ config, productsRepository, categoriesRepository, collectio
     } catch (error) { return next(error); }
   });
 
-  app.post("/api/admin/upload", requireAdmin, uploadLimiter, async (req, res, next) => {
+  app.post("/api/admin/upload", requireAdmin, uploadLimiter, express.raw({
+    type: ["image/jpeg", "image/png", "image/webp"],
+    limit: "2mb",
+  }), async (req, res, next) => {
     try {
-      const match = String(req.body?.image || "").match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
-      if (!match) return res.status(400).json({ message: "Imagen inválida. Usa JPG, PNG o WebP." });
-      const buffer = Buffer.from(match[2], "base64");
+      const binaryUpload = Buffer.isBuffer(req.body);
+      const match = binaryUpload ? null : String(req.body?.image || "").match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+      if (!binaryUpload && !match) return res.status(400).json({ message: "Imagen inválida. Usa JPG, PNG o WebP." });
+      const declaredType = binaryUpload ? String(req.get("content-type") || "").split(";")[0].replace("image/", "") : match[1];
+      const buffer = binaryUpload ? req.body : Buffer.from(match[2], "base64");
       if (!buffer.length || buffer.length > 8 * 1024 * 1024) return res.status(400).json({ message: "La imagen debe pesar menos de 8 MB." });
-      const extension = imageType(buffer, match[1]);
+      const extension = imageType(buffer, declaredType);
       if (!extension) return res.status(400).json({ message: "El contenido del archivo no coincide con una imagen válida." });
       await fs.mkdir(config.uploadsDirectory, { recursive: true });
       const filename = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}.${extension}`;
