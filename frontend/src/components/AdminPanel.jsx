@@ -92,6 +92,7 @@ function editorForm(product) {
 
 function Login({ onLogin, notice }) {
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -125,7 +126,12 @@ function Login({ onLogin, notice }) {
         {notice && <span className="admin-error">{notice}</span>}
         <form onSubmit={submit}>
           <label>Contraseña
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Ingresa tu contraseña" autoFocus />
+            <span className="admin-password-field">
+              <input type={passwordVisible ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Ingresa tu contraseña" autoFocus />
+              <button type="button" onClick={() => setPasswordVisible((visible) => !visible)} aria-label={passwordVisible ? "Ocultar contraseña" : "Mostrar contraseña"} title={passwordVisible ? "Ocultar contraseña" : "Mostrar contraseña"}>
+                <Icon name="eye" />
+              </button>
+            </span>
           </label>
           {error && <span className="admin-error">{error}</span>}
           <button className="button" type="submit" disabled={loading}>{loading ? "Validando..." : "Entrar al panel"} <Icon name="arrow" /></button>

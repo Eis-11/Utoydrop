@@ -427,6 +427,10 @@ button:disabled { cursor: not-allowed; }
 .admin-login label, .admin-field { display: grid; gap: 8px; color: #777; font-size: .57rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .admin-login input, .admin-field input, .admin-field select, .admin-field textarea, .admin-search { width: 100%; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; outline: 0; color: white; background: #0d0d0d; }
 .admin-login input, .admin-field input, .admin-field select { min-height: 48px; padding: 0 14px; }
+.admin-password-field { position: relative; display: block; }
+.admin-password-field input { padding-right: 50px; }
+.admin-password-field button { position: absolute; top: 50%; right: 8px; display: grid; width: 36px; height: 36px; padding: 0; place-items: center; border: 0; border-radius: 9px; color: #8a8a8a; background: transparent; cursor: pointer; transform: translateY(-50%); }
+.admin-password-field button:hover, .admin-password-field button:focus-visible { color: white; background: rgba(255,255,255,.07); outline: 0; }
 .admin-field textarea { resize: vertical; padding: 14px; }
 .admin-login .button { width: 100%; margin-top: 5px; }
 .admin-login .button svg { margin-left: auto; }
