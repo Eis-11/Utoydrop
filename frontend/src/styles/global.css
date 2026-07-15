@@ -279,18 +279,29 @@ button:disabled { cursor: not-allowed; }
 .empty-state p { margin: 0 0 20px; color: #777; }
 
 .trust-guide { border-top: 1px solid var(--line); }
-.trust-layout { display: grid; grid-template-columns: 1.2fr .8fr; gap: 18px; }
+.trust-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr); gap: 18px; }
 .size-guide, .policy-list article { border: 1px solid rgba(255,255,255,.11); border-radius: 18px; background: linear-gradient(145deg, #101010, #080808); box-shadow: inset 0 1px rgba(255,255,255,.04); }
 .size-guide { overflow: hidden; }
 .trust-block-head, .policy-list article { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: start; padding: 24px; }
 .trust-block-head span, .policy-list article > span { color: #555; font: 400 1.65rem "Archivo Black"; letter-spacing: -.08em; }
 .trust-block-head strong, .policy-list strong { display: block; margin-bottom: 7px; color: #f0f0f0; font-size: .72rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
 .trust-block-head p, .policy-list p { margin: 0; color: #777; font-size: .68rem; line-height: 1.65; }
+.size-guide-tabs { display: flex; gap: 7px; overflow-x: auto; padding: 0 24px 18px; scrollbar-width: thin; }
+.size-guide-tabs button { min-height: 38px; flex: 0 0 auto; padding: 0 13px; border: 1px solid rgba(255,255,255,.1); border-radius: 99px; color: #777; background: #0c0c0c; font-size: .54rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.size-guide-tabs button:hover { color: #ddd; border-color: rgba(255,255,255,.22); }
+.size-guide-tabs button.active { color: #080808; border-color: #fff; background: #fff; }
+.size-guide-table-head { display: grid; gap: 5px; padding: 18px 24px; border-top: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.018); }
+.size-guide-table-head > span { color: #687052; font-size: .48rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+.size-guide-table-head h3 { margin: 0; color: #f0f0f0; font: 400 .92rem "Archivo Black"; text-transform: uppercase; }
+.size-guide-table-head p { margin: 0; color: #777; font-size: .62rem; line-height: 1.55; }
+.size-guide-table-scroll { overflow-x: auto; }
 .size-guide table { width: 100%; border-collapse: collapse; }
 .size-guide th, .size-guide td { padding: 15px 18px; border-top: 1px solid rgba(255,255,255,.08); text-align: left; }
 .size-guide th { color: #666; font-size: .54rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
-.size-guide td { color: #bbb; font-size: .72rem; }
+.size-guide td { color: #bbb; font-size: .72rem; white-space: nowrap; }
 .size-guide td:first-child { color: white; font-weight: 800; }
+.size-guide-note { margin: 0; padding: 16px 24px 20px; border-top: 1px solid rgba(255,255,255,.08); color: #666; font-size: .58rem; line-height: 1.65; }
+.size-guide-note strong { color: #aaa; text-transform: uppercase; }
 .policy-list { display: grid; gap: 12px; }
 
 .about { display: grid; grid-template-columns: 1.05fr .95fr; gap: 100px; align-items: center; border-top: 1px solid var(--line); }
@@ -766,8 +777,10 @@ button:disabled { cursor: not-allowed; }
   .catalog-tools { padding-block: 12px; }
   .search-box, .custom-select-trigger, .favorite-filter { min-height: 48px; }
   .trust-block-head, .policy-list article { grid-template-columns: 1fr; gap: 10px; padding: 20px; }
-  .size-guide { overflow-x: auto; }
-  .size-guide table { min-width: 520px; }
+  .size-guide-tabs { padding-inline: 20px; }
+  .size-guide-table-head { padding-inline: 20px; }
+  .size-guide table { min-width: 480px; }
+  .size-guide-note { padding-inline: 20px; }
   .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .product-card { border-radius: 15px; content-visibility: auto; contain-intrinsic-size: 390px; }
   .product-card:hover { transform: none; }
