@@ -20,6 +20,7 @@ export function Footer() {
         <div className="footer-social">
           <strong>Síguenos</strong>
           <a href={businessConfig.instagram} target="_blank" rel="noreferrer"><Icon name="instagram" /> Instagram</a>
+          <a href={businessConfig.tiktok} target="_blank" rel="noreferrer"><Icon name="tiktok" /> TikTok</a>
           <a href={`mailto:${businessConfig.email}`}><Icon name="mail" /> Correo</a>
         </div>
       </div>

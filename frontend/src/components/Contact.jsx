@@ -21,6 +21,9 @@ export function Contact() {
           <a href={businessConfig.instagram} target="_blank" rel="noreferrer">
             <Icon name="instagram" /><span><small>Instagram</small>{businessConfig.instagramHandle}</span><Icon name="chevron" />
           </a>
+          <a href={businessConfig.tiktok} target="_blank" rel="noreferrer">
+            <Icon name="tiktok" /><span><small>TikTok</small>{businessConfig.tiktokHandle}</span><Icon name="chevron" />
+          </a>
           <a href={`mailto:${businessConfig.email}`}>
             <Icon name="mail" /><span><small>Correo</small>{businessConfig.email}</span><Icon name="chevron" />
           </a>

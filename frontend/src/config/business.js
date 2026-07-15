@@ -5,7 +5,9 @@ export const businessConfig = {
   // respaldo visible en el resto de la tienda.
   instagramDirect: "https://www.instagram.com/direct/t/17844536325494661/",
   instagramHandle: "@utoy_drop",
-  email: "hola@utoydrop.co",
+  tiktok: "https://www.tiktok.com/@utoy_drop",
+  tiktokHandle: "@utoy_drop",
+  email: "Utoydrop@gmail.com",
   location: "México",
 };
 
