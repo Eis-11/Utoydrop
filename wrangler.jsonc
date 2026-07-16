@@ -35,7 +35,7 @@
         {
           "binding": "DB",
           "database_name": "utoy-drop-preview",
-          "database_id": "00000000-0000-0000-0000-000000000000",
+          "database_id": "9f565db6-d9e1-49e9-9a50-dd95aed27517",
           "migrations_dir": "backend/migrations"
         }
       ],
