@@ -533,6 +533,8 @@ button:disabled { cursor: not-allowed; }
 .order-customer strong { color: #eee; }
 .order-customer small, .order-items span { color: #777; font-size: .56rem; line-height: 1.4; }
 .order-status { min-height: 34px; border: 1px solid rgba(255,255,255,.12); border-radius: 9px; color: #ddd; background: #101010; font-size: .58rem; }
+.order-status:disabled { cursor: not-allowed; opacity: .65; }
+.order-terminal-note { display: block; margin-top: 5px; color: #ff8f8f; font-size: .48rem; font-weight: 700; letter-spacing: .04em; }
 .admin-empty { padding: 24px; color: #777; text-align: center; }
 .stock-low { color: #ff9c75; }
 .status-toggle { padding: 7px 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 99px; color: #777; background: #101010; font-size: .55rem; cursor: pointer; }

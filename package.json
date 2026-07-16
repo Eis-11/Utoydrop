@@ -4,13 +4,18 @@
   "description": "Catálogo y gestión de pedidos de UTOY DROP",
   "main": "index.js",
   "scripts": {
-    "dev": "pnpm --filter utoy-drop-catalog dev",
+    "dev": "pnpm run build && wrangler dev --env preview --local",
+    "dev:frontend": "pnpm --filter utoy-drop-catalog dev",
     "build": "pnpm --filter utoy-drop-catalog build",
     "preview": "pnpm --filter utoy-drop-catalog preview",
-    "backend": "pnpm --filter utoy-shop-backend start",
-    "serve": "node backend/index.js",
     "test": "pnpm run build && pnpm --filter utoy-shop-backend test",
-    "check": "pnpm --filter utoy-shop-backend check"
+    "check": "pnpm run build && pnpm --filter utoy-shop-backend check && wrangler deploy --dry-run --env preview --outdir .wrangler/dry-run",
+    "test:wrangler": "pnpm run build && pnpm run db:migrate:local && node scripts/wrangler-smoke.mjs",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local --env preview",
+    "db:migrate:preview": "wrangler d1 migrations apply DB --remote --env preview",
+    "db:migrate:production": "wrangler d1 migrations apply DB --remote --env production",
+    "deploy:preview": "pnpm run build && wrangler deploy --env preview",
+    "deploy:production": "pnpm run build && wrangler deploy --env production"
   },
   "keywords": [],
   "author": "",
@@ -22,7 +27,10 @@
   ],
   "type": "commonjs",
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
-  "packageManager": "pnpm@11.7.0"
+  "packageManager": "pnpm@11.7.0",
+  "devDependencies": {
+    "wrangler": "4.111.0"
+  }
 }

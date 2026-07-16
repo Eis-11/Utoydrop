@@ -29,16 +29,8 @@ export async function apiRequest(path, options = {}) {
   }
 }
 
-export function getProducts() {
-  return apiRequest("/api/products", { cache: "no-store" });
-}
-
-export function getCategories() {
-  return apiRequest("/api/categories", { cache: "no-store" });
-}
-
-export function getCollections() {
-  return apiRequest("/api/collections", { cache: "no-store" });
+export function getCatalog() {
+  return apiRequest("/api/catalog");
 }
 
 export function createOrder(customer, items) {

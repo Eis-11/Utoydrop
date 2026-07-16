@@ -1,49 +1,92 @@
-# Arquitectura y ruta de escalamiento
+# Arquitectura Cloudflare de UTOY DROP
 
-## Capas actuales
+## Flujo de solicitudes
 
 ```text
-frontend/src/
-  components/       interfaz y flujos de tienda/administración
-  config/           identidad y canales oficiales del negocio
-  data/             catálogo inicial para recuperación
-  hooks/            estado persistente del navegador
-  services/         cliente HTTP centralizado
-  utils/            reglas reutilizables de inventario
-
-backend/
-  src/config.js     configuración de entorno
-  src/app.js        rutas HTTP y composición de la aplicación
-  src/middleware/   seguridad, origen y límites de solicitudes
-  src/repositories/ persistencia intercambiable
-  src/services/     reglas de negocio y validación de pedidos
-  tests/            pruebas unitarias y de integración
+Navegador
+  ├─ archivos HTML/CSS/JS ──> Workers Static Assets (frontend/dist)
+  ├─ /api/* ────────────────> Hono Worker ──> D1
+  └─ /uploads/* ────────────> Hono Worker ──> R2 PRODUCT_IMAGES
 ```
 
-El frontend nunca decide el precio final. El servidor reconstruye cada línea desde el catálogo, valida talla/color/cantidad y calcula el total. La persistencia JSON usa escrituras atómicas y serializadas para evitar archivos parciales durante solicitudes simultáneas.
+Static Assets usa `single-page-application`, por lo que una navegación directa o recarga en una ruta interna devuelve `index.html`. Las reglas `_headers` aplican CSP y cabeceras defensivas sin invocar el Worker para cada asset.
 
-## Capacidades actuales
+## Límites de responsabilidad
 
-1. Base escalable: configuración, middleware, repositorios, servicios y cliente HTTP separados.
-2. Experiencia: checkout de dos pasos, mensajes de error útiles, folio, semántica accesible, carga diferida y metadatos sociales.
-   El alta administrativa incluye plantillas de producto, categorías libres, variantes con etiquetas configurables, inventario por combinación, duplicación, búsqueda, filtros y paginación.
-3. Instagram: los botones de pedido apuntan al chat directo configurado de UTOY DROP y los enlaces sociales al perfil `https://www.instagram.com/utoy_drop/`; el resumen se copia y requiere envío explícito del comprador.
-4. Calidad: compilación de producción, pruebas de reglas de pedido e integración HTTP.
+- React conserva presentación, navegación, carrito, favoritos y panel.
+- El Worker valida origen, sesión, entradas, imágenes y reglas de negocio.
+- D1 es la única fuente de verdad para precios, inventario, pedidos, sesiones y límites.
+- R2 es la única fuente de imágenes administrables.
+- El navegador nunca decide el precio final ni confirma stock.
 
-## Siguiente escala recomendada
+## Esquema D1
 
-- Sustituir `JsonRepository` por `PostgresProductRepository` y `PostgresOrderRepository` sin cambiar la capa HTTP.
-- Guardar imágenes en S3, Cloudflare R2 o equivalente con URLs firmadas.
-- Mover las sesiones administrativas a Redis o a un proveedor de identidad.
-- Incorporar reservas de inventario con caducidad y transacciones cuando exista pago en línea.
-- Conectar Meta Webhooks para asociar el folio del pedido con una conversación iniciada por el comprador.
-- Desplegar detrás de HTTPS permanente, observabilidad, copias de seguridad y alertas.
+| Tabla | Responsabilidad |
+| --- | --- |
+| `products` | Producto, precio, visibilidad, colección, categoría e imagen. Usa soft delete. |
+| `product_options` | Valores ordenados de las dos opciones configurables. |
+| `product_variants` | Stock compartido o por combinación; triggers impiden negativos. |
+| `categories` / `collections` | Filtros administrables y datos iniciales. |
+| `orders` | Cliente, total, estado, reserva, restauración y archivo. |
+| `order_items` | Snapshot inmutable del producto solicitado. |
+| `inventory_movements` | Libro auditable de reservas y restauraciones. |
+| `order_events` | Historial de creación, estado, cancelación y archivo. |
+| `admin_sessions` | Hash del token, actividad y expiración. |
+| `rate_limits` | Contadores persistentes por ámbito y cliente. |
+| `catalog_state` | Revisión optimista que evita sobrescribir reservas con una edición obsoleta. |
 
-## Seguridad operativa
+Los índices priorizan catálogo visible, variantes por producto, pedidos activos/estado, sesiones vencidas y ventanas de rate limiting.
 
-- Nunca subir `backend/.env`, pedidos ni uploads de clientes al repositorio.
-- Configurar una contraseña única mediante `ADMIN_PASSWORD`; el servidor no inicia si falta.
-- La sesión administrativa usa una cookie `HttpOnly`, `SameSite=Strict` y `Secure` sobre HTTPS; no se guardan tokens en `localStorage`.
-- Las rutas de escritura validan origen, sesión, límites de frecuencia, estructura del catálogo y contenido real de las imágenes.
-- La aplicación envía CSP restrictiva, HSTS sobre HTTPS, protección contra iframes, MIME sniffing y políticas de recursos/permisos.
-- Respaldar `backend/data` antes de migrar o editar en lote.
+## Atomicidad e inventario
+
+D1 ejecuta `D1Database.batch()` como transacción: una sentencia fallida revierte la secuencia completa.
+
+### Reserva
+
+1. Se leen productos/variantes vigentes y se valida la solicitud.
+2. La transacción inserta pedido y artículos, descuenta cada variante, registra movimientos negativos y crea el evento.
+3. El trigger `product_variants_nonnegative_update` aborta si cualquier descuento produciría stock negativo.
+4. El trigger `inactive_variants_cannot_be_reserved` impide reservar una variante retirada mientras se procesaba la solicitud.
+5. Un aborto revierte incluso descuentos ejecutados antes del fallo: nunca hay reserva parcial.
+6. La reserva incrementa la revisión del catálogo dentro de la misma transacción.
+
+Las escrituras administrativas incluyen la revisión que el panel leyó. Un trigger aborta el batch con `catalog_revision_conflict` cuando la revisión cambió; el panel recarga D1 y solicita revisar el cambio antes de guardar otra vez.
+
+### Restauración
+
+- Cancelar ejecuta aumentos condicionados a `inventory_state = 'reserved'`, movimientos únicos y cambio terminal dentro del mismo batch.
+- Archivar un pedido `nuevo` usa el mismo patrón con `restore_archive`.
+- Restricciones únicas `(order_id, variant_id, kind)` y condiciones SQL evitan dobles devoluciones.
+- Archivar cualquier otro estado solo escribe `archived_at`.
+- El trigger `orders_are_never_physically_deleted` conserva el historial.
+
+## Máquina de estados
+
+Estados operativos: `nuevo`, `confirmado`, `pagado`, `enviado`, `cerrado`.
+
+- Se permiten correcciones entre estados operativos para conservar el comportamiento del panel.
+- Cualquier estado operativo puede pasar a `cancelado` y restaurar una vez.
+- `cancelado` es terminal; el trigger `cancelled_order_is_terminal` y el Worker rechazan reactivaciones.
+- Un cliente que retoma la compra genera un pedido nuevo y una nueva validación transaccional.
+
+## Sesiones y seguridad
+
+El token aleatorio solo existe en la cookie. D1 almacena SHA-256, expiración y última actividad. La cookie usa `HttpOnly`, `Secure`, `SameSite=Strict` y path `/api/admin`.
+
+Las escrituras validan origen. Los contadores de login, pedidos, catálogo e imágenes viven en D1, por lo que sobreviven reinicios y ejecuciones distribuidas. Ninguna ruta administrativa, sesión o pedido permite caché pública.
+
+## Caché
+
+- `/api/catalog`: ETag, 30 segundos públicos y 60 segundos `stale-while-revalidate`.
+- `/uploads/*`: un año e immutable; los nombres son aleatorios y el contenido no cambia.
+- `/api/admin/*` y `/api/orders`: `private, no-store`.
+- Assets con hash Vite: un año e immutable.
+- `index.html`: revalidación obligatoria.
+
+## Entornos
+
+Preview y producción tienen nombres de Worker, bases D1, buckets R2, orígenes permitidos y secretos independientes. Los UUID incluidos en `wrangler.jsonc` son marcadores y deben reemplazarse manualmente; no se crean ni despliegan recursos desde pruebas o CI.
+
+## Capacidad gratuita
+
+Con unos 200 clientes mensuales, la carga esperada es pequeña frente a Workers Free, D1 Free y R2 Free. El diseño reduce lecturas mediante catálogo unificado, ETag e índices. Las imágenes se optimizan en el navegador antes de R2. Los límites y alertas operativas están documentados en README y deben revisarse antes de producción.

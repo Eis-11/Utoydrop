@@ -14,7 +14,7 @@ import { Icon } from "./components/Icons";
 import { MobileDock } from "./components/MobileDock";
 import { useLocalStorage } from "./hooks/useLocalStorage";
 import { products as initialProducts } from "./data/products";
-import { getCategories, getCollections, getProducts } from "./services/api";
+import { getCatalog } from "./services/api";
 
 const initialCategories = [...new Set(initialProducts.map((product) => product.category).filter(Boolean))].sort();
 const initialCollections = [...new Set(initialProducts.map((product) => product.collection).filter(Boolean))].sort();
@@ -33,7 +33,16 @@ export default function App() {
   const [catalogProducts, setCatalogProducts] = useState(initialProducts);
   const [catalogCategories, setCatalogCategories] = useState(initialCategories);
   const [catalogCollections, setCatalogCollections] = useState(initialCollections);
+  const [catalogRevision, setCatalogRevision] = useState(0);
   const closeModal = useCallback(() => setSelectedProduct(null), []);
+  const refreshCatalog = useCallback(async () => {
+    const catalog = await getCatalog();
+    setCatalogProducts(catalog.products);
+    setCatalogCategories(catalog.categories);
+    setCatalogCollections(catalog.collections);
+    setCatalogRevision(catalog.revision || 0);
+    return catalog;
+  }, []);
 
   useEffect(() => {
     if (window.localStorage.getItem("utoy-storage-version") === STORAGE_VERSION) return;
@@ -62,23 +71,19 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    function refreshCatalog() {
-      getProducts().then((products) => active && setCatalogProducts(products)).catch(() => {});
-      getCategories().then((categories) => active && setCatalogCategories(categories)).catch(() => {});
-      getCollections().then((collections) => active && setCatalogCollections(collections)).catch(() => {});
+    function refreshIfActive() {
+      if (active) refreshCatalog().catch(() => {});
     }
-    refreshCatalog();
-    const interval = window.setInterval(refreshCatalog, 30000);
+    refreshIfActive();
     function refreshWhenVisible() {
-      if (document.visibilityState === "visible") refreshCatalog();
+      if (document.visibilityState === "visible") refreshIfActive();
     }
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       active = false;
-      window.clearInterval(interval);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, []);
+  }, [refreshCatalog]);
 
   useEffect(() => {
     const mobileQuery = window.matchMedia("(max-width: 780px)");
@@ -189,7 +194,7 @@ export default function App() {
 
   const adminRoute = route === "#admin";
   if (adminRoute) {
-    return <AdminPanel products={catalogProducts} categories={catalogCategories} collections={catalogCollections} onProductsChange={setCatalogProducts} onCategoriesChange={setCatalogCategories} onCollectionsChange={setCatalogCollections} />;
+    return <AdminPanel products={catalogProducts} categories={catalogCategories} collections={catalogCollections} catalogRevision={catalogRevision} onProductsChange={setCatalogProducts} onCategoriesChange={setCatalogCategories} onCollectionsChange={setCatalogCollections} onRevisionChange={setCatalogRevision} onCatalogRefresh={refreshCatalog} />;
   }
 
   const activeProducts = catalogProducts.filter((product) => product.active !== false);
