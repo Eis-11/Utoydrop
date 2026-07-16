@@ -47,7 +47,7 @@
       ],
       "vars": {
         "ENVIRONMENT": "preview",
-        "ALLOWED_ORIGINS": "http://localhost:8787,http://127.0.0.1:8787",
+        "ALLOWED_ORIGINS": "https://utoy-drop-preview.utoydrop.workers.dev,http://localhost:8787,http://127.0.0.1:8787",
         "ADMIN_SESSION_TTL_MINUTES": "5"
       }
     },

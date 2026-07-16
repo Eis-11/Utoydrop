@@ -172,7 +172,11 @@ Usa contraseñas diferentes. Wrangler solicitará el valor sin guardarlo en arch
 
 ### 5. Configurar dominios permitidos
 
-En `wrangler.jsonc`, reemplaza `https://REPLACE_WITH_PRODUCTION_DOMAIN` por el origen HTTPS exacto de producción. Agrega el dominio de preview a `ALLOWED_ORIGINS` del entorno preview cuando exista.
+El origen exacto de preview ya está registrado como `https://utoy-drop-preview.utoydrop.workers.dev`. Antes de producción, reemplaza `https://REPLACE_WITH_PRODUCTION_DOMAIN` por el origen HTTPS exacto de producción.
+
+### Política pendiente para imágenes R2 huérfanas
+
+La limpieza automática de imágenes R2 huérfanas queda pendiente. Hasta definirla y probarla, la limpieza debe ser manual y conservadora: nunca se elimina una imagen referenciada por un producto, un pedido activo o un pedido archivado. Una futura tarea deberá calcular referencias, generar un reporte en modo simulación, conservar un periodo de gracia y dejar un registro auditable antes de eliminar objetos.
 
 ### 6. Aplicar migraciones
 

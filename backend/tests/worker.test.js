@@ -1,5 +1,6 @@
 import { env, SELF } from "cloudflare:test";
 import { describe, expect, test } from "vitest";
+import { app } from "../src/worker.js";
 
 const ORIGIN = "https://example.com";
 let clientCounter = 0;
@@ -83,6 +84,16 @@ async function archive(cookie, id) {
 }
 
 describe("UTOY DROP Worker", () => {
+  test("explica cuando falta la contraseña administrativa", async () => {
+    const response = await app.fetch(new Request(`${ORIGIN}/api/admin/login`, {
+      method: "POST",
+      headers: headers({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ password: "valor-de-prueba" }),
+    }), { ...env, ADMIN_PASSWORD: "" });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ message: "La contraseña administrativa no está configurada." });
+  });
+
   test("expone salud y cabeceras de seguridad", async () => {
     const response = await SELF.fetch(`${ORIGIN}/api/health`);
     expect(response.status).toBe(200);
@@ -99,6 +110,8 @@ describe("UTOY DROP Worker", () => {
     expect(etag).toBeTruthy();
     const second = await SELF.fetch(`${ORIGIN}/api/catalog`, { headers: { "If-None-Match": etag } });
     expect(second.status).toBe(304);
+    const weak = await SELF.fetch(`${ORIGIN}/api/catalog`, { headers: { "If-None-Match": `W/${etag}` } });
+    expect(weak.status).toBe(304);
   });
 
   test("protege el catálogo administrativo sin sesión", async () => {

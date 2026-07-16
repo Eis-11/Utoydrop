@@ -33,7 +33,8 @@ app.get("/api/catalog", async (c) => {
   c.header("ETag", etag);
   c.header("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
   c.header("Vary", "Accept-Encoding");
-  if (c.req.header("if-none-match") === etag) return c.body(null, 304);
+  const ifNoneMatch = c.req.header("if-none-match");
+  if (ifNoneMatch === "*" || ifNoneMatch?.replace(/^W\//, "") === etag) return c.body(null, 304);
   return c.body(body, 200, { "Content-Type": "application/json; charset=UTF-8" });
 });
 
@@ -171,7 +172,7 @@ app.onError((error, c) => {
   if (status >= 500) console.error(error);
   c.header("Cache-Control", "private, no-store, no-cache, must-revalidate");
   return c.json({
-    message: status >= 500 ? "Ocurrió un error en el servidor." : error.message,
+    message: error instanceof HttpError ? error.message : "Ocurrió un error en el servidor.",
     ...(error instanceof HttpError ? { code: error.code } : {}),
   }, status);
 });

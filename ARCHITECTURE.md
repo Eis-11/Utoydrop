@@ -85,7 +85,11 @@ Las escrituras validan origen. Los contadores de login, pedidos, catálogo e im�
 
 ## Entornos
 
-Preview y producción tienen nombres de Worker, bases D1, buckets R2, orígenes permitidos y secretos independientes. Los UUID incluidos en `wrangler.jsonc` son marcadores y deben reemplazarse manualmente; no se crean ni despliegan recursos desde pruebas o CI.
+Preview y producción tienen nombres de Worker, bases D1, buckets R2, orígenes permitidos y secretos independientes. El UUID de preview ya corresponde a `utoy-drop-preview`; el UUID de producción continúa como marcador y debe reemplazarse manualmente cuando se autorice crear ese entorno. Las pruebas y CI no crean ni despliegan recursos.
+
+## Conservación de imágenes R2
+
+La política de limpieza de objetos huérfanos está pendiente. No existe borrado automático: las imágenes referenciadas por productos, pedidos activos o pedidos archivados se conservan. Antes de implementar una limpieza se requiere un cálculo completo de referencias, ejecución simulada, periodo de gracia y auditoría de cada eliminación.
 
 ## Capacidad gratuita
 
