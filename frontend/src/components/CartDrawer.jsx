@@ -2,14 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { businessConfig, instagramDirectUrl } from "../config/business";
 import { createOrder } from "../services/api";
 import {
+  beginDeferredOrderHandoff,
   buildOrderSummary,
-  closeReservedWindow,
   COPIED_ORDER_MESSAGE,
-  copyOrderSummary,
+  copyAndOpenInstagram,
+  copyOrderSummaryDetailed,
   createCheckoutToken,
+  MANUAL_HANDOFF_LABEL,
   openInstagram,
-  reserveInstagramWindow,
-  sendReservedWindowToInstagram,
+  recordClipboardError,
 } from "../services/orderHandoff";
 import { Icon } from "./Icons";
 import { SafeImage } from "./SafeImage";
@@ -96,24 +97,23 @@ export function CartDrawer({ open, items, onClose, onQuantity, onRemove, onClear
     submitInFlightRef.current = true;
     setSending(true);
     setCheckoutError("");
-    const reservedInstagramWindow = reserveInstagramWindow();
-
     try {
       if (!checkoutTokenRef.current) checkoutTokenRef.current = createCheckoutToken();
-      const order = await createOrder(customer, items, checkoutTokenRef.current);
-      const message = buildOrderSummary({ order, customer, items, instagramHandle: businessConfig.instagramHandle });
-      const wasCopied = await copyOrderSummary(message);
-      const instagramOpened = sendReservedWindowToInstagram(reservedInstagramWindow, instagramDirectUrl());
+      const handoff = beginDeferredOrderHandoff({
+        createOrderRequest: () => createOrder(customer, items, checkoutTokenRef.current),
+        buildSummary: (order) => buildOrderSummary({ order, customer, items, instagramHandle: businessConfig.instagramHandle }),
+        instagramUrl: instagramDirectUrl(),
+      });
+      const result = await handoff.completion;
 
-      setPreparedOrder(order);
-      setCopied(wasCopied);
-      setClipboardFailed(!wasCopied);
-      setInstagramBlocked(!instagramOpened);
-      if (!wasCopied) {
-        setCheckoutError("No pudimos copiar el pedido automáticamente. El resumen está abajo para copiarlo manualmente.");
+      setPreparedOrder(result.order);
+      setCopied(result.copied);
+      setClipboardFailed(!result.copied);
+      setInstagramBlocked(result.copied && !result.instagramOpened);
+      if (!result.copied) {
+        setCheckoutError("La copia automática no está disponible. Usa COPIAR Y ABRIR INSTAGRAM para continuar.");
       }
     } catch (error) {
-      closeReservedWindow(reservedInstagramWindow);
       setCheckoutError(error.message);
     } finally {
       submitInFlightRef.current = false;
@@ -122,10 +122,19 @@ export function CartDrawer({ open, items, onClose, onQuantity, onRemove, onClear
   }
 
   async function copyAgain() {
-    const wasCopied = await copyOrderSummary(orderMessage);
-    setCopied(wasCopied);
-    setClipboardFailed(!wasCopied);
-    setCheckoutError(wasCopied ? "" : "No pudimos copiar el pedido. Selecciona el resumen y cópialo manualmente.");
+    const result = await copyOrderSummaryDetailed(orderMessage);
+    if (!result.ok) recordClipboardError(result.errorType);
+    setCopied(result.ok);
+    setClipboardFailed(!result.ok);
+    setCheckoutError(result.ok ? "" : "No pudimos copiar el pedido. Selecciona el resumen y cópialo manualmente.");
+  }
+
+  async function copyAndOpen() {
+    const result = await copyAndOpenInstagram({ summary: orderMessage, instagramUrl: instagramDirectUrl() });
+    setCopied(result.copied);
+    setClipboardFailed(!result.copied);
+    setInstagramBlocked(result.copied && !result.instagramOpened);
+    setCheckoutError(result.copied ? "" : "No pudimos copiar el pedido. Instagram no se abrió; usa el resumen como respaldo.");
   }
 
   function openInstagramAgain() {
@@ -197,16 +206,18 @@ export function CartDrawer({ open, items, onClose, onQuantity, onRemove, onClear
                     </label>
                   )}
 
-                  <button className="button checkout-button" type="button" onClick={copyAgain}>
-                    <Icon name="copy" /> {copied ? "Copiar pedido otra vez" : "Copiar pedido"}
+                  <button className="button checkout-button" type="button" onClick={copied ? copyAgain : copyAndOpen}>
+                    <Icon name="copy" /> {copied ? "Copiar pedido otra vez" : MANUAL_HANDOFF_LABEL}
                   </button>
 
                   {instagramBlocked && (
                     <span className="checkout-error" role="alert">Instagram fue bloqueado por el navegador. Tu pedido sigue guardado.</span>
                   )}
-                  <button className="button button-ghost checkout-finish" type="button" onClick={openInstagramAgain}>
-                    <Icon name="instagram" /> {instagramBlocked ? "Abrir Instagram" : "Abrir Instagram otra vez"}
-                  </button>
+                  {copied && (
+                    <button className="button button-ghost checkout-finish" type="button" onClick={openInstagramAgain}>
+                      <Icon name="instagram" /> {instagramBlocked ? "Abrir Instagram" : "Abrir Instagram otra vez"}
+                    </button>
+                  )}
 
                   {checkoutError && <span className="checkout-error" role="alert">{checkoutError}</span>}
                   <small>La tienda no envía mensajes por ti ni usa credenciales de Instagram.</small>

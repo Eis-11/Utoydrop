@@ -95,7 +95,7 @@ La reserva sucede al crear el pedido:
 
 El navegador genera una clave criptográfica por intento de compra. D1 guarda únicamente su hash SHA-256 bajo un índice único. Un doble clic o un reintento tras perder la respuesta devuelve el pedido ya creado (`replayed: true`) sin insertar otro pedido ni descontar inventario por segunda vez.
 
-Después de crear el pedido, la tienda prepara un resumen con folio, variantes, cantidades, total y entrega, intenta copiarlo y abre el chat de `@utoy_drop`. Instagram nunca recibe credenciales ni texto mediante parámetros. Si el navegador bloquea el portapapeles o la ventana, el pedido permanece guardado y la pantalla conserva el resumen y las acciones manuales.
+Durante el clic original, la tienda inicia `navigator.clipboard.write()` con un `ClipboardItem` cuyo `Blob` queda pendiente. Solo después de que D1 crea el pedido se resuelve ese contenido con el folio real, variantes, cantidades, total y entrega. Instagram se abre únicamente cuando el navegador confirma la copia. Si `ClipboardItem` no está disponible o la escritura falla, el pedido permanece guardado y aparece `COPIAR Y ABRIR INSTAGRAM`, además del resumen en texto como último respaldo. Instagram nunca recibe credenciales ni texto mediante parámetros.
 
 Cada cambio de stock incrementa `catalog_state.revision`. El panel envía la revisión que leyó; si un pedido reservó inventario mientras el administrador editaba, D1 rechaza el guardado obsoleto y el panel recarga el catálogo. Así una edición administrativa nunca puede volver a introducir stock ya reservado.
 
