@@ -428,6 +428,8 @@ button:disabled { cursor: not-allowed; }
 .drawer-empty h3 { margin: 20px 0 5px; font: 400 1.15rem "Archivo Black"; text-transform: uppercase; }
 .drawer-empty p { margin: 0 0 20px; color: #777; font-size: .75rem; }
 .toast { position: fixed; z-index: 150; left: 50%; bottom: 28px; display: flex; align-items: center; gap: 9px; padding: 13px 17px; border: 1px solid rgba(255,255,255,.2); border-radius: 99px; color: #eee; background: rgba(20,20,20,.94); box-shadow: 0 12px 45px rgba(0,0,0,.55); transform: translateX(-50%); backdrop-filter: blur(15px); font-size: .68rem; font-weight: 700; animation: toast-in .3s ease; }
+.toast-retry { padding: 6px 10px; border: 1px solid rgba(255,255,255,.28); border-radius: 99px; color: #fff; background: transparent; font: inherit; cursor: pointer; }
+.toast-retry:hover { border-color: var(--lime); color: var(--lime); }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 10px); } }
 .mobile-dock { display: none; }
 

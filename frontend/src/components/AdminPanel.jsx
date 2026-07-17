@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { synchronizeCatalogAfterOrderMutation } from "../services/catalogState";
 import { variantKey } from "../utils/inventory";
 import { Icon } from "./Icons";
 import { SafeImage } from "./SafeImage";
@@ -440,7 +441,20 @@ export function AdminPanel({ products, categories = [], collections = [], catalo
   const [categorySaving, setCategorySaving] = useState(false);
   const [newCollection, setNewCollection] = useState("");
   const [collectionSaving, setCollectionSaving] = useState(false);
+  const [catalogSyncFailed, setCatalogSyncFailed] = useState(false);
   const closeEditor = useCallback(() => setEditorOpen(false), []);
+
+  const syncCatalogAfterOrderChange = useCallback(async (mutation) => {
+    try {
+      await synchronizeCatalogAfterOrderMutation(mutation, onCatalogRefresh);
+      setCatalogSyncFailed(false);
+      return true;
+    } catch {
+      setCatalogSyncFailed(true);
+      setNotice("El pedido se actualizÃ³, pero no se pudo sincronizar el inventario. Intenta de nuevo.");
+      return false;
+    }
+  }, [onCatalogRefresh]);
 
   useEffect(() => {
     window.localStorage.removeItem("utoy-admin-session");
@@ -725,6 +739,7 @@ export function AdminPanel({ products, categories = [], collections = [], catalo
     }
     setOrders((current) => current.map((item) => item.id === order.id ? data : item));
     setSelectedOrder((current) => current?.id === order.id ? data : current);
+    if (status === "cancelado" && !await syncCatalogAfterOrderChange("cancel")) return;
     setNotice(status === "cancelado" ? "Pedido cancelado definitivamente; inventario restaurado" : "Pedido actualizado");
     window.setTimeout(() => setNotice(""), 2200);
   }
@@ -745,7 +760,15 @@ export function AdminPanel({ products, categories = [], collections = [], catalo
       return;
     }
     setOrders((current) => current.filter((item) => item.id !== order.id));
+    if (!await syncCatalogAfterOrderChange("archive")) return;
     setNotice("Pedido archivado; historial conservado");
+    window.setTimeout(() => setNotice(""), 2200);
+  }
+
+  async function retryCatalogSync() {
+    setNotice("Sincronizando catÃ¡logo e inventario...");
+    if (!await syncCatalogAfterOrderChange("archive")) return;
+    setNotice("CatÃ¡logo e inventario actualizados");
     window.setTimeout(() => setNotice(""), 2200);
   }
 
@@ -948,7 +971,7 @@ export function AdminPanel({ products, categories = [], collections = [], catalo
       </section>
       {editorOpen && <ProductEditor product={editorProduct} categoryOptions={categoryOptions} collectionOptions={collectionOptions} onSave={saveProduct} onClose={closeEditor} onUpload={uploadProductImage} />}
       {selectedOrder && <OrderDetails order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
-      {notice && <div className="toast"><Icon name="check" /> {notice}</div>}
+      {notice && <div className="toast" role="status"><Icon name="check" /> <span>{notice}</span>{catalogSyncFailed && <button className="toast-retry" type="button" onClick={retryCatalogSync}>Reintentar</button>}</div>}
     </main>
   );
 }

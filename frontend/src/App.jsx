@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { About } from "./components/About";
 import { AdminPanel } from "./components/AdminPanel";
 import { CartDrawer } from "./components/CartDrawer";
@@ -15,6 +15,7 @@ import { MobileDock } from "./components/MobileDock";
 import { useLocalStorage } from "./hooks/useLocalStorage";
 import { products as initialProducts } from "./data/products";
 import { getCatalog } from "./services/api";
+import { applyCatalogSnapshot, createCatalogRefreshCoordinator } from "./services/catalogState";
 
 const initialCategories = [...new Set(initialProducts.map((product) => product.category).filter(Boolean))].sort();
 const initialCollections = [...new Set(initialProducts.map((product) => product.collection).filter(Boolean))].sort();
@@ -34,15 +35,17 @@ export default function App() {
   const [catalogCategories, setCatalogCategories] = useState(initialCategories);
   const [catalogCollections, setCatalogCollections] = useState(initialCollections);
   const [catalogRevision, setCatalogRevision] = useState(0);
+  const catalogRefreshRef = useRef(null);
+  if (!catalogRefreshRef.current) {
+    catalogRefreshRef.current = createCatalogRefreshCoordinator(getCatalog, (catalog) => applyCatalogSnapshot(catalog, {
+      onProductsChange: setCatalogProducts,
+      onCategoriesChange: setCatalogCategories,
+      onCollectionsChange: setCatalogCollections,
+      onRevisionChange: setCatalogRevision,
+    }));
+  }
   const closeModal = useCallback(() => setSelectedProduct(null), []);
-  const refreshCatalog = useCallback(async () => {
-    const catalog = await getCatalog();
-    setCatalogProducts(catalog.products);
-    setCatalogCategories(catalog.categories);
-    setCatalogCollections(catalog.collections);
-    setCatalogRevision(catalog.revision || 0);
-    return catalog;
-  }, []);
+  const refreshCatalog = useCallback(() => catalogRefreshRef.current(), []);
 
   useEffect(() => {
     if (window.localStorage.getItem("utoy-storage-version") === STORAGE_VERSION) return;
