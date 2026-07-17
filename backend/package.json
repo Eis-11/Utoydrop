@@ -1,20 +1,22 @@
 {
   "name": "utoy-shop-backend",
-  "version": "1.0.0",
-  "description": "API segura y persistencia de catálogo/pedidos para UTOY DROP",
-  "main": "index.js",
+  "version": "2.0.0",
+  "description": "Cloudflare Worker de UTOY DROP con D1 y R2",
+  "type": "module",
+  "main": "src/worker.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
-    "test": "node --test tests/*.test.js",
-    "check": "node --check index.js && node --check src/app.js"
+    "test": "vitest run",
+    "check": "node --check src/worker.js && node --check src/catalog.js && node --check src/featuredDrops.js && node --check src/images.js && node --check src/orders.js && node --check src/security.js && node --check src/validation.js"
   },
   "dependencies": {
-    "express": "^4.21.2"
+    "hono": "4.12.30"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "@cloudflare/vitest-pool-workers": "0.18.5",
+    "vitest": "4.1.10"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": "22.x"
+  },
   "private": true
 }

@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { businessConfig, instagramDirectUrl } from "../config/business";
 import { createOrder } from "../services/api";
+import {
+  beginDeferredOrderHandoff,
+  buildOrderSummary,
+  COPIED_ORDER_MESSAGE,
+  copyAndOpenInstagram,
+  copyOrderSummaryDetailed,
+  createCheckoutToken,
+  MANUAL_HANDOFF_LABEL,
+  openInstagram,
+  recordClipboardError,
+} from "../services/orderHandoff";
 import { Icon } from "./Icons";
 import { SafeImage } from "./SafeImage";
 
@@ -17,39 +28,25 @@ const emptyCustomer = {
   notes: "",
 };
 
-function buildOrderMessage(order, customer, items) {
-  const orderItems = order?.items || items;
-  const orderCustomer = order?.customer || customer;
-  const total = order?.total ?? orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  return [
-    `Hola ${businessConfig.instagramHandle}, quiero confirmar este pedido:`,
-    order?.id ? `Folio: ${order.id}` : null,
-    "",
-    `Cliente: ${orderCustomer.name}`,
-    `Instagram: ${orderCustomer.instagram}`,
-    `Ciudad: ${orderCustomer.city}`,
-    `Entrega: ${orderCustomer.delivery}`,
-    `Pago: ${orderCustomer.payment}`,
-    orderCustomer.notes ? `Notas: ${orderCustomer.notes}` : null,
-    "",
-    ...orderItems.map((item, index) => `${index + 1}. ${item.name} | ${item.option1Label || "Talla"}: ${item.size} | ${item.option2Label || "Color"}: ${item.color} | Cant. ${item.quantity} | ${money(item.price * item.quantity)}`),
-    "",
-    `Total estimado: ${money(total)}`,
-    "",
-    "¿Me ayudan a confirmar disponibilidad, total final y entrega?",
-  ].filter((line) => line !== null).join("\n");
-}
-
 export function CartDrawer({ open, items, onClose, onQuantity, onRemove, onClear }) {
   const [customer, setCustomer] = useState(emptyCustomer);
   const [sending, setSending] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [preparedOrder, setPreparedOrder] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [clipboardFailed, setClipboardFailed] = useState(false);
+  const [instagramBlocked, setInstagramBlocked] = useState(false);
   const closeButtonRef = useRef(null);
+  const submitInFlightRef = useRef(false);
+  const checkoutTokenRef = useRef(null);
   const totalPieces = items.reduce((sum, item) => sum + item.quantity, 0);
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const orderMessage = useMemo(() => buildOrderMessage(preparedOrder, customer, items), [preparedOrder, customer, items]);
+  const orderMessage = useMemo(() => buildOrderSummary({
+    order: preparedOrder,
+    customer,
+    items,
+    instagramHandle: businessConfig.instagramHandle,
+  }), [preparedOrder, customer, items]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -70,50 +67,78 @@ export function CartDrawer({ open, items, onClose, onQuantity, onRemove, onClear
   useEffect(() => {
     setPreparedOrder(null);
     setCopied(false);
+    setClipboardFailed(false);
+    setInstagramBlocked(false);
+    checkoutTokenRef.current = null;
   }, [items]);
+
+  function resetAttempt() {
+    checkoutTokenRef.current = null;
+    setCheckoutError("");
+    setPreparedOrder(null);
+    setCopied(false);
+    setClipboardFailed(false);
+    setInstagramBlocked(false);
+  }
 
   function updateCustomer(field, value) {
     setCustomer((current) => ({ ...current, [field]: value }));
-    setCheckoutError("");
-    setPreparedOrder(null);
+    resetAttempt();
   }
 
   async function submitCheckout(event) {
     event.preventDefault();
-    if (!items.length) return;
+    if (!items.length || submitInFlightRef.current) return;
     if (!customer.name.trim() || !customer.instagram.trim() || !customer.city.trim()) {
       setCheckoutError("Completa nombre, usuario de Instagram y ciudad.");
       return;
     }
+
+    submitInFlightRef.current = true;
     setSending(true);
     setCheckoutError("");
     try {
-      const order = await createOrder(customer, items);
-      const message = buildOrderMessage(order, customer, items);
-      setPreparedOrder(order);
-      try {
-        await navigator.clipboard.writeText(message);
-        setCopied(true);
-        window.location.assign(instagramDirectUrl());
-      } catch {
-        setCopied(false);
-        setCheckoutError("El pedido está listo, pero el navegador no permitió copiarlo. Usa el botón para copiar y abrir el chat.");
+      if (!checkoutTokenRef.current) checkoutTokenRef.current = createCheckoutToken();
+      const handoff = beginDeferredOrderHandoff({
+        createOrderRequest: () => createOrder(customer, items, checkoutTokenRef.current),
+        buildSummary: (order) => buildOrderSummary({ order, customer, items, instagramHandle: businessConfig.instagramHandle }),
+        instagramUrl: instagramDirectUrl(),
+      });
+      const result = await handoff.completion;
+
+      setPreparedOrder(result.order);
+      setCopied(result.copied);
+      setClipboardFailed(!result.copied);
+      setInstagramBlocked(result.copied && !result.instagramOpened);
+      if (!result.copied) {
+        setCheckoutError("La copia automática no está disponible. Usa COPIAR Y ABRIR INSTAGRAM para continuar.");
       }
     } catch (error) {
       setCheckoutError(error.message);
     } finally {
+      submitInFlightRef.current = false;
       setSending(false);
     }
   }
 
-  async function handoffToInstagram() {
-    try {
-      await navigator.clipboard.writeText(orderMessage);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-    window.open(instagramDirectUrl(), "_blank", "noopener,noreferrer");
+  async function copyAgain() {
+    const result = await copyOrderSummaryDetailed(orderMessage);
+    if (!result.ok) recordClipboardError(result.errorType);
+    setCopied(result.ok);
+    setClipboardFailed(!result.ok);
+    setCheckoutError(result.ok ? "" : "No pudimos copiar el pedido. Selecciona el resumen y cópialo manualmente.");
+  }
+
+  async function copyAndOpen() {
+    const result = await copyAndOpenInstagram({ summary: orderMessage, instagramUrl: instagramDirectUrl() });
+    setCopied(result.copied);
+    setClipboardFailed(!result.copied);
+    setInstagramBlocked(result.copied && !result.instagramOpened);
+    setCheckoutError(result.copied ? "" : "No pudimos copiar el pedido. Instagram no se abrió; usa el resumen como respaldo.");
+  }
+
+  function openInstagramAgain() {
+    setInstagramBlocked(!openInstagram(instagramDirectUrl()));
   }
 
   function finishOrder() {
@@ -121,6 +146,10 @@ export function CartDrawer({ open, items, onClose, onQuantity, onRemove, onClear
     setPreparedOrder(null);
     setCustomer(emptyCustomer);
     setCopied(false);
+    setClipboardFailed(false);
+    setInstagramBlocked(false);
+    setCheckoutError("");
+    checkoutTokenRef.current = null;
     onClose();
   }
 
@@ -162,14 +191,36 @@ export function CartDrawer({ open, items, onClose, onQuantity, onRemove, onClear
 
               {preparedOrder ? (
                 <div className="checkout-handoff" role="status">
-                  <span className="checkout-step">Pedido preparado</span>
+                  <span className="checkout-step">Pedido creado</span>
                   <h3>{preparedOrder.id}</h3>
-                  <p>Guardamos la solicitud. Copia el resumen y abre el chat directo de <strong>{businessConfig.instagramHandle}</strong> para confirmar.</p>
-                  <button className="button checkout-button" type="button" onClick={handoffToInstagram}>
-                    <Icon name="instagram" /> Copiar y abrir {businessConfig.instagramHandle} <Icon name="arrow" />
+                  {copied ? (
+                    <p className="checkout-copy-success"><strong>{COPIED_ORDER_MESSAGE}</strong></p>
+                  ) : (
+                    <p>No se copió el pedido. Usa el resumen y el botón manual antes de enviarlo a <strong>{businessConfig.instagramHandle}</strong>.</p>
+                  )}
+
+                  {clipboardFailed && (
+                    <label className="checkout-manual-copy">
+                      <span>Resumen del pedido</span>
+                      <textarea readOnly rows="10" value={orderMessage} onFocus={(event) => event.target.select()} />
+                    </label>
+                  )}
+
+                  <button className="button checkout-button" type="button" onClick={copied ? copyAgain : copyAndOpen}>
+                    <Icon name="copy" /> {copied ? "Copiar pedido otra vez" : MANUAL_HANDOFF_LABEL}
                   </button>
+
+                  {instagramBlocked && (
+                    <span className="checkout-error" role="alert">Instagram fue bloqueado por el navegador. Tu pedido sigue guardado.</span>
+                  )}
+                  {copied && (
+                    <button className="button button-ghost checkout-finish" type="button" onClick={openInstagramAgain}>
+                      <Icon name="instagram" /> {instagramBlocked ? "Abrir Instagram" : "Abrir Instagram otra vez"}
+                    </button>
+                  )}
+
                   {checkoutError && <span className="checkout-error" role="alert">{checkoutError}</span>}
-                  <small>{copied ? "Resumen copiado. Pégalo en el chat y pulsa Enviar." : "Instagram no permite que una tienda web envíe el DM por ti."}</small>
+                  <small>La tienda no envía mensajes por ti ni usa credenciales de Instagram.</small>
                   <button className="button button-ghost checkout-finish" type="button" onClick={finishOrder}>Ya envié el mensaje</button>
                 </div>
               ) : (

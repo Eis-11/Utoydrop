@@ -1,153 +1,254 @@
 # UTOY DROP
 
-Tienda web y panel administrativo de UTOY DROP. El proyecto incluye catálogo, inventario por variantes, favoritos, carrito, pedidos por Instagram y administración de productos, categorías, colecciones y pedidos.
+Tienda y panel administrativo de UTOY DROP preparados para ejecutarse como una sola aplicación en Cloudflare Workers con Static Assets, D1 y R2.
 
-El repositorio se publica con el catálogo y los pedidos vacíos. Las fotografías subidas, los pedidos y los datos de clientes se conservan fuera de Git.
+## Arquitectura
 
-## Tecnologías
+- **Frontend:** React 18 + Vite, publicado desde `frontend/dist` mediante Workers Static Assets.
+- **API:** Hono dentro de Cloudflare Workers; conserva las rutas `/api/*`.
+- **Datos:** D1 para catálogo, variantes, pedidos, sesiones y rate limiting.
+- **Imágenes:** R2 mediante el binding `PRODUCT_IMAGES`, servidas por `/uploads/*`.
+- **Secretos:** `ADMIN_PASSWORD` se configura con `wrangler secret`; nunca se guarda en Git.
+- **Runtime de herramientas:** Node.js 22 y `pnpm@11.7.0`.
 
-- Frontend: React 19 y Vite 8.
-- Backend: Node.js 20 y Express 4.
-- Persistencia local actual: archivos JSON y almacenamiento de imágenes en disco.
-- Gestor del monorepo: pnpm workspaces.
+El carrito y los favoritos permanecen en `localStorage` del navegador para conservar la experiencia del cliente. No son datos autoritativos: precios, stock, pedidos, sesiones y catálogo existen únicamente en D1/R2.
 
 ## Estructura
 
 ```text
-.
-├── backend/
-│   ├── index.js                 # Entrada del servidor
-│   ├── .env.example             # Variables requeridas sin secretos
-│   ├── src/
-│   │   ├── app.js               # API, sesiones, catálogo y archivos estáticos
-│   │   ├── config.js            # Configuración desde variables de entorno
-│   │   ├── middleware/          # Seguridad, origen y límites
-│   │   ├── repositories/        # Persistencia JSON
-│   │   └── services/            # Lógica de pedidos e inventario
-│   ├── tests/                    # Pruebas del backend
-│   ├── data/                     # Catálogo base y configuración visible
-│   └── uploads/.gitkeep          # Directorio local; archivos ignorados
-├── frontend/
-│   ├── public/img/               # Logos públicos de la marca
-│   ├── src/
-│   │   ├── components/          # Tienda, carrito, guías y administrador
-│   │   ├── config/              # Datos públicos del negocio
-│   │   ├── hooks/               # Estado persistente del navegador
-│   │   ├── services/            # Cliente de la API
-│   │   ├── styles/              # Estilos globales
-│   │   └── utils/               # Utilidades de inventario
-│   └── vite.config.js
-├── ARCHITECTURE.md
-├── package.json
-├── pnpm-lock.yaml
-└── pnpm-workspace.yaml
+backend/
+  migrations/             migraciones versionadas y datos iniciales D1
+  src/
+    worker.js              rutas del Worker
+    catalog.js             lectura y escritura del catálogo D1
+    featuredDrops.js       historial y publicación atómica de la portada
+    orders.js              pedidos, estados e inventario atómico
+    images.js              validación y almacenamiento R2
+    security.js            sesiones, cookies, CSP, origen y rate limiting
+    validation.js          validación de entradas
+  tests/                   pruebas en Workers Runtime
+frontend/
+  public/_headers          CSP y cabeceras para Static Assets
+  src/                     tienda y panel administrativo React
+scripts/
+  wrangler-smoke.mjs       prueba HTTP con Wrangler local
+wrangler.jsonc             bindings y entornos de Cloudflare
 ```
 
-## Requisitos
+## Preparación local
 
-- Node.js 20 o superior.
-- pnpm 11.7.0 o una versión compatible con el lockfile.
+Requisitos:
 
-## Instalación reproducible
+- Node.js 22.
+- Corepack habilitado o pnpm 11.7.0.
 
 ```bash
+corepack enable
+corepack prepare pnpm@11.7.0 --activate
 pnpm install --frozen-lockfile
 ```
 
-Crea la configuración local del backend sin versionarla:
+Para probar login localmente, crea un archivo **no versionado** `.dev.vars.preview`:
 
-```bash
-cp backend/.env.example backend/.env
+```text
+ADMIN_PASSWORD=<DEFINE_UN_VALOR_LOCAL_NO_REUTILIZADO>
 ```
 
-En PowerShell:
-
-```powershell
-Copy-Item backend\.env.example backend\.env
-```
-
-Edita `backend/.env` y define una contraseña administrativa única:
-
-```env
-PORT=4000
-NODE_ENV=development
-ADMIN_PASSWORD=usa-una-frase-larga-y-unica
-ADMIN_SESSION_TTL_MINUTES=5
-```
-
-`ADMIN_PASSWORD` es obligatoria. El servidor no inicia si falta; nunca debe guardarse en Git.
-
-## Desarrollo local
-
-Ejecuta el backend y Vite en terminales separadas:
-
-```bash
-pnpm run backend
-pnpm run dev
-```
-
-Vite usa su puerto de desarrollo y redirige `/api` a `http://localhost:4000`.
-
-## Ejecución de producción local
-
-```bash
-pnpm run build
-pnpm run serve
-```
-
-- Tienda: `http://localhost:4000/`
-- Administrador: `http://localhost:4000/#admin`
+Nunca copies una contraseña real en `wrangler.jsonc`, archivos `.env`, documentación, commits o Pull Requests.
 
 ## Comandos
 
 | Comando | Función |
 | --- | --- |
-| `pnpm install --frozen-lockfile` | Instala exactamente las dependencias del lockfile. |
-| `pnpm run dev` | Inicia Vite para desarrollar el frontend. |
-| `pnpm run backend` | Inicia el backend con Node.js. |
-| `pnpm run build` | Compila el frontend en `frontend/dist`. |
-| `pnpm run preview` | Previsualiza el build con Vite. |
-| `pnpm run serve` | Sirve API y frontend compilado desde el backend. |
-| `pnpm run check` | Valida la sintaxis de los archivos principales del backend. |
-| `pnpm test` | Compila el frontend y ejecuta las pruebas automatizadas. |
+| `pnpm dev` | Compila y abre Worker + Assets + D1 + R2 locales con Wrangler. |
+| `pnpm dev:frontend` | Ejecuta solamente Vite para trabajo visual. |
+| `pnpm run build` | Genera `frontend/dist`. |
+| `pnpm run check` | Compila, revisa sintaxis y ejecuta un bundle Wrangler `--dry-run`. |
+| `pnpm test` | Compila y ejecuta pruebas en Workers Runtime. |
+| `pnpm test:wrangler` | Aplica migraciones locales y prueba API, assets y fallback SPA con `wrangler dev`. |
+| `pnpm db:migrate:local` | Aplica migraciones a D1 local. |
+| `pnpm db:migrate:preview` | Aplica migraciones a D1 preview. |
+| `pnpm db:migrate:production` | Aplica migraciones a D1 producción. |
+| `pnpm deploy:preview` | Compila y despliega preview. Requiere autorización. |
+| `pnpm deploy:production` | Compila y despliega producción. Requiere autorización explícita. |
 
-## Datos y archivos excluidos
+## Catálogo y caché
 
-- `backend/data/products.json`: se publica vacío; el administrador agrega el catálogo real.
-- `backend/data/categories.json`: categorías base visibles en la tienda.
-- `backend/data/collections.json`: colecciones base visibles en la tienda.
-- `backend/data/orders.json`: pedidos y datos de clientes; ignorado por Git.
-- `backend/uploads/`: fotografías subidas; sólo `.gitkeep` se versiona.
-- `backend/.env` y cualquier `.env.*`: configuración privada; ignorada por Git.
-- `node_modules/`, `frontend/dist/`, logs, cachés y temporales: generados localmente e ignorados.
+`GET /api/catalog` entrega productos, categorías y colecciones en una sola solicitud, con `ETag` y:
 
-Las únicas imágenes versionadas son los logos públicos ubicados en `frontend/public/img/`.
+```text
+Cache-Control: public, max-age=30, stale-while-revalidate=60
+```
+
+El frontend ya no consulta tres endpoints cada 30 segundos. Carga el catálogo unificado al iniciar y vuelve a validarlo cuando la pestaña recupera visibilidad. Las rutas administrativas, pedidos y sesiones usan siempre `private, no-store`.
+
+Los endpoints públicos anteriores (`/api/products`, `/api/categories` y `/api/collections`) se conservan por compatibilidad.
+
+`GET /api/featured-drop` entrega el único drop publicado con `ETag`. La tienda solicita una respuesta fresca para reflejar publicaciones u ocultamientos inmediatamente; la caché compartida puede conservarlo durante 30 segundos (`s-maxage=30`) y otros clientes pueden revalidar con el ETag. Si D1 o la API fallan, React conserva la tarjeta original como fallback; una respuesta correcta con `drop: null` oculta la tarjeta.
+
+## Drop destacado de la portada
+
+El panel incluye la sección **Portada**:
+
+- Guarda borradores sin alterar la tienda.
+- Publica una versión y archiva atómicamente al destacado anterior.
+- Oculta el destacado sin borrar su historial.
+- Permite seleccionar y volver a publicar una versión anterior.
+- Mantiene imagen, texto alternativo, etiquetas y destino como campos HTML independientes y validados.
+- Acepta destinos de producto o colección existentes; sin destino la tarjeta continúa como elemento visual.
+
+La migración `0005_featured_drops.sql` crea `featured_drops`, un índice de historial y un índice único parcial que impide dos filas con estado `published`. La publicación usa `D1Database.batch()`, por lo que el reemplazo del activo y la publicación de la nueva versión se confirman o revierten juntos.
+
+Las imágenes se cargan en `PRODUCT_IMAGES` con la validación real existente para JPG, PNG y WebP. No hay borrado automático. `DELETE /api/admin/images/:key` solo elimina un objeto cuando D1 confirma que no está referenciado por productos, artículos de pedidos ni ninguna versión del historial de drops.
+
+## Política de pedidos e inventario
+
+La reserva sucede al crear el pedido:
+
+1. El servidor reconstruye precios y variantes desde D1.
+2. Todos los artículos se reservan en un único `D1Database.batch()` transaccional.
+3. Cada variante se descuenta mediante SQL y un trigger impide stock negativo.
+4. Si una sola variante es insuficiente, D1 revierte pedido, artículos, movimientos y descuentos completos.
+5. `inventory_movements`, `inventory_state`, `inventory_reserved_at` e `inventory_restored_at` permiten auditar cada reserva o devolución.
+
+El navegador genera una clave criptográfica por intento de compra. D1 guarda únicamente su hash SHA-256 bajo un índice único. Un doble clic o un reintento tras perder la respuesta devuelve el pedido ya creado (`replayed: true`) sin insertar otro pedido ni descontar inventario por segunda vez.
+
+Durante el clic original, la tienda inicia `navigator.clipboard.write()` con un `ClipboardItem` cuyo `Blob` queda pendiente. Solo después de que D1 crea el pedido se resuelve ese contenido con el folio real, variantes, cantidades, total y entrega. Instagram se abre únicamente cuando el navegador confirma la copia. Si `ClipboardItem` no está disponible o la escritura falla, el pedido permanece guardado y aparece `COPIAR Y ABRIR INSTAGRAM`, además del resumen en texto como último respaldo. Instagram nunca recibe credenciales ni texto mediante parámetros.
+
+**Pendiente de validación manual:** la copia automática todavía debe comprobarse satisfactoriamente en Brave/Chrome real y en un teléfono. Las pruebas automatizadas y el fallback seguro no se consideran confirmación de que el portapapeles automático ya funcione en esos navegadores.
+
+Cada cambio de stock incrementa `catalog_state.revision`. El panel envía la revisión que leyó; si un pedido reservó inventario mientras el administrador editaba, D1 rechaza el guardado obsoleto y el panel recarga el catálogo. Así una edición administrativa nunca puede volver a introducir stock ya reservado.
+
+Reglas de restauración:
+
+- Cancelar restaura una sola vez y convierte el pedido en terminal.
+- Archivar un pedido `nuevo` restaura una sola vez.
+- Archivar pedidos `confirmado`, `pagado`, `enviado`, `cerrado` o `cancelado` nunca restaura stock.
+- Ningún pedido se elimina físicamente; todos usan `archived_at`.
+- No existe vencimiento automático. El administrador cancela pedidos abandonados manualmente.
+
+### Máquina de estados
+
+```text
+nuevo ───────────────┐
+confirmado ──────────┤
+pagado ──────────────┼──> cancelado (terminal)
+enviado ─────────────┤
+cerrado ─────────────┘
+
+nuevo <──> confirmado <──> pagado <──> enviado <──> cerrado
+```
+
+Los estados operativos pueden corregirse entre sí para conservar el comportamiento actual del panel. Una vez cancelado, el backend rechaza cualquier reactivación. Si el cliente retoma la compra, debe crear un pedido nuevo y validar otra vez el stock.
 
 ## Seguridad
 
-- La sesión administrativa usa cookies `HttpOnly`, `SameSite=Strict` y `Secure` sobre HTTPS.
-- Las escrituras verifican el mismo origen y tienen límites de solicitudes.
-- Las imágenes se validan y optimizan antes de guardarse.
-- No se almacenan contraseñas ni tokens administrativos en el navegador o el repositorio.
-- No deben publicarse pedidos, datos de clientes, archivos `.env`, cargas reales ni respaldos.
+- Solo hashes SHA-256 de tokens de sesión se guardan en D1.
+- Cookie administrativa `HttpOnly`, `Secure`, `SameSite=Strict` y limitada a `/api/admin`.
+- Sesiones con expiración por inactividad persistida.
+- Rate limiting persistente por cliente y ámbito en D1.
+- Validación de origen para escrituras.
+- CSP, HSTS, protección contra iframes y MIME sniffing.
+- Imágenes limitadas a 2 MB, con verificación binaria real de JPG, PNG y WebP.
+- Nombres R2 aleatorios y `Content-Type` seguro al servir.
+- Pedidos archivados e imágenes históricas se conservan para auditoría.
 
-## Validación antes de publicar
+## Configuración manual de Cloudflare
+
+Estos pasos **no están automatizados** para evitar crear recursos o desplegar sin autorización.
+
+### 1. Autenticar Wrangler
 
 ```bash
-pnpm install --frozen-lockfile
-pnpm run check
-pnpm test
-pnpm run build
+pnpm exec wrangler login
+pnpm exec wrangler whoami
 ```
 
-## Migración prevista a Cloudflare
+### 2. Crear las bases D1 separadas
 
-El proyecto actual usa Express, archivos JSON y almacenamiento local. La migración pendiente contempla:
+```bash
+pnpm exec wrangler d1 create utoy-drop-preview
+pnpm exec wrangler d1 create utoy-drop-production
+```
 
-- Cloudflare Pages para el frontend compilado.
-- Cloudflare Workers para sustituir la API Express.
-- Cloudflare D1 para catálogo, configuración y pedidos.
-- Cloudflare R2 para las imágenes de productos.
-- Secrets/variables de Cloudflare para la contraseña y configuración privada.
+Copia cada `database_id` devuelto en el entorno correspondiente de `wrangler.jsonc`. Sustituye únicamente los UUID de marcador:
 
-No se debe desplegar el backend actual en Pages sin adaptar previamente la API y la persistencia. Consulta [ARCHITECTURE.md](./ARCHITECTURE.md) para el diseño actual y las recomendaciones de migración.
+- Preview: `00000000-0000-0000-0000-000000000000`
+- Producción: `11111111-1111-1111-1111-111111111111`
+
+### 3. Crear buckets R2 Standard separados
+
+```bash
+pnpm exec wrangler r2 bucket create utoy-drop-product-images-preview
+pnpm exec wrangler r2 bucket create utoy-drop-product-images-production
+```
+
+No selecciones Infrequent Access: su uso no entra en la capa gratuita de R2 y tiene duración mínima.
+
+### 4. Configurar secretos por entorno
+
+```bash
+pnpm exec wrangler secret put ADMIN_PASSWORD --env preview
+pnpm exec wrangler secret put ADMIN_PASSWORD --env production
+```
+
+Usa contraseñas diferentes. Wrangler solicitará el valor sin guardarlo en archivos.
+
+### 5. Configurar dominios permitidos
+
+El origen exacto de preview ya está registrado como `https://utoy-drop-preview.utoydrop.workers.dev`. Antes de producción, reemplaza `https://REPLACE_WITH_PRODUCTION_DOMAIN` por el origen HTTPS exacto de producción.
+
+### Política pendiente para imágenes R2 huérfanas
+
+La limpieza automática de imágenes R2 huérfanas queda pendiente. Hasta definirla y probarla, la limpieza debe ser manual y conservadora: nunca se elimina una imagen referenciada por un producto, un pedido activo, un pedido archivado o el historial de drops destacados. El endpoint administrativo de borrado comprueba estas referencias; una futura limpieza masiva deberá además generar un reporte en modo simulación, conservar un periodo de gracia y dejar un registro auditable.
+
+### 6. Aplicar migraciones
+
+```bash
+pnpm db:migrate:preview
+pnpm db:migrate:production
+```
+
+Aplica primero preview, valida la tienda y respalda producción antes de cada migración futura.
+
+### 7. Desplegar solamente con autorización
+
+```bash
+pnpm deploy:preview
+# Después de validar y recibir autorización explícita:
+pnpm deploy:production
+```
+
+Luego configura el dominio personalizado desde **Workers & Pages > Worker > Settings > Domains & Routes**.
+
+## Plan gratuito y alertas
+
+Para aproximadamente 200 clientes al mes, esta arquitectura debe quedar muy por debajo de las cuotas gratuitas si las imágenes se optimizan y no se crean integraciones externas. Los límites oficiales pueden cambiar; compruébalos antes del despliegue:
+
+- [Workers Pricing](https://developers.cloudflare.com/workers/platform/pricing/): 100,000 solicitudes dinámicas al día y 10 ms de CPU por invocación en Free; Static Assets se sirven gratis.
+- [D1 Pricing](https://developers.cloudflare.com/d1/platform/pricing/): 5 millones de filas leídas/día, 100,000 filas escritas/día y 5 GB totales en Free.
+- [R2 Pricing](https://developers.cloudflare.com/r2/pricing/): 10 GB-mes, 1 millón de operaciones Class A y 10 millones Class B al mes para almacenamiento Standard; egreso gratuito.
+
+En Free, superar límites diarios de Workers/D1 normalmente produce errores hasta el reinicio de cuota; no se debe asumir que el servicio escalará automáticamente.
+
+Configura alertas en **Manage Account > Billing > Billable Usage > Budget alerts**. Crea al menos una advertencia de gasto total y revisa las notificaciones de Workers/R2 disponibles. Consulta [Budget alerts](https://developers.cloudflare.com/billing/manage/budget-alerts/). Mantén el plan Workers Free y no habilites Workers Paid, R2 Infrequent Access ni productos facturables sin autorización.
+
+## Recuperación y rollback
+
+Antes de una migración remota:
+
+```bash
+pnpm exec wrangler d1 export DB --remote --env production --output utoy-drop-backup.sql
+```
+
+No subas el respaldo a Git: contiene pedidos y datos de clientes.
+
+Si una versión del Worker falla:
+
+1. Detén nuevos cambios administrativos.
+2. Usa el historial de versiones de Workers o `wrangler rollback --env production` para regresar al Worker anterior.
+3. Si hubo cambios incompatibles de esquema, restaura el respaldo D1 en una base nueva y actualiza el binding; no edites pedidos manualmente.
+4. R2 permanece separado del código y no debe borrarse durante el rollback.
+5. Corrige en una rama nueva, valida preview y publica mediante otro Pull Request.
+
+El backend Node/Express anterior no debe reactivarse después de que D1 reciba pedidos, porque produciría dos fuentes de verdad y riesgo de sobreventa.

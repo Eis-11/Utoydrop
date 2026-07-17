@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { synchronizeCatalogAfterOrderMutation } from "../services/catalogState";
 import { variantKey } from "../utils/inventory";
+import { FeaturedDropAdmin } from "./FeaturedDropAdmin";
 import { Icon } from "./Icons";
 import { SafeImage } from "./SafeImage";
 
@@ -421,7 +423,7 @@ function OrderDetails({ order, onClose }) {
   );
 }
 
-export function AdminPanel({ products, categories = [], collections = [], onProductsChange, onCategoriesChange, onCollectionsChange }) {
+export function AdminPanel({ products, categories = [], collections = [], catalogRevision = 0, onProductsChange, onCategoriesChange, onCollectionsChange, onRevisionChange, onCatalogRefresh, onFeaturedDropChange }) {
   const [authenticated, setAuthenticated] = useState(null);
   const [loginNotice, setLoginNotice] = useState("");
   const [query, setQuery] = useState("");
@@ -440,7 +442,20 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
   const [categorySaving, setCategorySaving] = useState(false);
   const [newCollection, setNewCollection] = useState("");
   const [collectionSaving, setCollectionSaving] = useState(false);
+  const [catalogSyncFailed, setCatalogSyncFailed] = useState(false);
   const closeEditor = useCallback(() => setEditorOpen(false), []);
+
+  const syncCatalogAfterOrderChange = useCallback(async (mutation) => {
+    try {
+      await synchronizeCatalogAfterOrderMutation(mutation, onCatalogRefresh);
+      setCatalogSyncFailed(false);
+      return true;
+    } catch {
+      setCatalogSyncFailed(true);
+      setNotice("El pedido se actualizÃ³, pero no se pudo sincronizar el inventario. Intenta de nuevo.");
+      return false;
+    }
+  }, [onCatalogRefresh]);
 
   useEffect(() => {
     window.localStorage.removeItem("utoy-admin-session");
@@ -561,14 +576,20 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
     const response = await fetch("/api/admin/products", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ products: next }),
+      body: JSON.stringify({ products: next, revision: catalogRevision }),
     });
+    const data = await response.json().catch(() => ({}));
     if (response.status === 401) {
       setAuthenticated(false);
       return false;
     }
-    if (!response.ok) return false;
-    onProductsChange(next);
+    if (!response.ok) {
+      if (response.status === 409) await onCatalogRefresh?.().catch(() => {});
+      setNotice(data.message || "No se pudo guardar el catálogo");
+      return false;
+    }
+    onProductsChange(data.products);
+    onRevisionChange?.(data.revision);
     return true;
   }
 
@@ -591,7 +612,7 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
       const response = await fetch("/api/admin/categories", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ categories: nextCategories }),
+        body: JSON.stringify({ categories: nextCategories, revision: catalogRevision }),
       });
       const data = await response.json().catch(() => ({}));
       if (response.status === 401) {
@@ -599,10 +620,12 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
         return false;
       }
       if (!response.ok) {
+        if (response.status === 409) await onCatalogRefresh?.().catch(() => {});
         setNotice(data.message || "No se pudieron guardar las categorías");
         return false;
       }
       onCategoriesChange(data.categories);
+      onRevisionChange?.(data.revision);
       return true;
     } finally {
       setCategorySaving(false);
@@ -638,7 +661,7 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
       const response = await fetch("/api/admin/collections", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ collections: nextCollections }),
+        body: JSON.stringify({ collections: nextCollections, revision: catalogRevision }),
       });
       const data = await response.json().catch(() => ({}));
       if (response.status === 401) {
@@ -646,10 +669,12 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
         return false;
       }
       if (!response.ok) {
+        if (response.status === 409) await onCatalogRefresh?.().catch(() => {});
         setNotice(data.message || "No se pudieron guardar las colecciones");
         return false;
       }
       onCollectionsChange(data.collections);
+      onRevisionChange?.(data.revision);
       return true;
     } finally {
       setCollectionSaving(false);
@@ -693,22 +718,38 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
     }
   }
 
-  async function updateOrderStatus(id, status) {
-    const response = await fetch(`/api/admin/orders/${id}`, {
+  async function updateOrderStatus(order, status) {
+    if (order.status === "cancelado") {
+      setNotice("Un pedido cancelado no puede reactivarse");
+      return;
+    }
+    if (status === "cancelado" && !window.confirm(`¿Cancelar el pedido ${order.id}? Esta acción es definitiva, restaurará el inventario una sola vez y el pedido no podrá reactivarse.`)) return;
+    const response = await fetch(`/api/admin/orders/${order.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-    if (!response.ok) return;
-    const updated = await response.json();
-    setOrders((current) => current.map((order) => order.id === id ? updated : order));
-    setSelectedOrder((current) => current?.id === id ? updated : current);
-    setNotice("Pedido actualizado");
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      setAuthenticated(false);
+      return;
+    }
+    if (!response.ok) {
+      setNotice(data.message || "No se pudo actualizar el pedido");
+      return;
+    }
+    setOrders((current) => current.map((item) => item.id === order.id ? data : item));
+    setSelectedOrder((current) => current?.id === order.id ? data : current);
+    if (status === "cancelado" && !await syncCatalogAfterOrderChange("cancel")) return;
+    setNotice(status === "cancelado" ? "Pedido cancelado definitivamente; inventario restaurado" : "Pedido actualizado");
     window.setTimeout(() => setNotice(""), 2200);
   }
 
   async function removeOrder(order) {
-    if (!window.confirm(`¿Eliminar permanentemente el pedido ${order.id}?`)) return;
+    const action = order.status === "nuevo"
+      ? "archivará el pedido y restaurará el inventario reservado una sola vez"
+      : "archivará el pedido sin restaurar inventario; el historial se conservará";
+    if (!window.confirm(`¿Archivar el pedido ${order.id}? Esta acción ${action}.`)) return;
     const response = await fetch(`/api/admin/orders/${encodeURIComponent(order.id)}`, { method: "DELETE" });
     const data = await response.json().catch(() => ({}));
     if (response.status === 401) {
@@ -720,7 +761,15 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
       return;
     }
     setOrders((current) => current.filter((item) => item.id !== order.id));
-    setNotice("Pedido eliminado");
+    if (!await syncCatalogAfterOrderChange("archive")) return;
+    setNotice("Pedido archivado; historial conservado");
+    window.setTimeout(() => setNotice(""), 2200);
+  }
+
+  async function retryCatalogSync() {
+    setNotice("Sincronizando catÃ¡logo e inventario...");
+    if (!await syncCatalogAfterOrderChange("archive")) return;
+    setNotice("CatÃ¡logo e inventario actualizados");
     window.setTimeout(() => setNotice(""), 2200);
   }
 
@@ -771,6 +820,7 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
         <nav>
           <button className={activeView === "overview" ? "active" : ""} type="button" onClick={() => setActiveView("overview")}><Icon name="grid" /> Resumen</button>
           <button className={activeView === "products" ? "active" : ""} type="button" onClick={() => setActiveView("products")}><Icon name="bag" /> Productos</button>
+          <button className={activeView === "featured-drop" ? "active" : ""} type="button" onClick={() => setActiveView("featured-drop")}><Icon name="spark" /> Portada</button>
           <button className={activeView === "orders" ? "active" : ""} type="button" onClick={() => setActiveView("orders")}><Icon name="check" /> Pedidos</button>
           <a href="#inicio"><Icon name="eye" /> Ver tienda</a>
         </nav>
@@ -778,7 +828,7 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
       </aside>
       <section className="admin-main">
         <header className="admin-topbar">
-          <div><span className="admin-kicker">Control central</span><h1>{activeView === "overview" ? "Resumen operativo" : activeView === "products" ? "Catálogo" : "Pedidos"}</h1></div>
+          <div><span className="admin-kicker">Control central</span><h1>{activeView === "overview" ? "Resumen operativo" : activeView === "products" ? "Catálogo" : activeView === "featured-drop" ? "Drop destacado" : "Pedidos"}</h1></div>
           <div className="admin-top-actions">
             <span className="admin-live-status"><i /> Pedidos en vivo</span>
             <button className="button button-ghost" type="button" onClick={loadOrders}>{ordersLoading ? "Actualizando..." : "Actualizar"}</button>
@@ -803,6 +853,7 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
                 <button className="button" type="button" onClick={() => { setEditorProduct(undefined); setEditorOpen(true); }}><Icon name="plus" /> Nuevo producto</button>
                 <button className="button button-ghost" type="button" onClick={() => setActiveView("orders")}><Icon name="check" /> Revisar pedidos</button>
                 <button className="button button-ghost" type="button" onClick={() => setActiveView("products")}><Icon name="bag" /> Editar catálogo</button>
+                <button className="button button-ghost" type="button" onClick={() => setActiveView("featured-drop")}><Icon name="spark" /> Editar portada</button>
               </div>
             </article>
             <article className="admin-panel-block">
@@ -874,6 +925,15 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
           </div>
           {productPageCount > 1 && <div className="admin-pagination"><button type="button" disabled={productPage === 1} onClick={() => setProductPage((page) => page - 1)}>Anterior</button><span>{productPage} / {productPageCount}</span><button type="button" disabled={productPage === productPageCount} onClick={() => setProductPage((page) => page + 1)}>Siguiente</button></div>}
         </section>}
+        {activeView === "featured-drop" && (
+          <FeaturedDropAdmin
+            products={products}
+            collections={collections}
+            onUpload={uploadProductImage}
+            onUnauthorized={() => setAuthenticated(false)}
+            onPublishedChange={onFeaturedDropChange}
+          />
+        )}
         {activeView === "orders" && <section className="admin-catalog admin-orders">
           <div className="admin-catalog-head">
             <div><h2>Pedidos recientes</h2><p>Consulta solicitudes enviadas desde el carrito y actualiza su estado.</p></div>
@@ -900,7 +960,7 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
                     <td><div className="order-items">{order.items.map((item) => <span key={`${order.id}-${item.name}-${item.size}-${item.color}`}>{item.quantity}x {item.name} ({item.option1Label || "Talla"}: {item.size}, {item.option2Label || "Color"}: {item.color})</span>)}</div></td>
                     <td><strong>{money(order.total)}</strong></td>
                     <td>
-                      <select className="order-status" value={order.status} onChange={(event) => updateOrderStatus(order.id, event.target.value)}>
+                      <select className="order-status" value={order.status} disabled={order.status === "cancelado"} title={order.status === "cancelado" ? "La cancelación es definitiva" : "Actualizar estado"} onChange={(event) => updateOrderStatus(order, event.target.value)}>
                         <option value="nuevo">Nuevo</option>
                         <option value="confirmado">Confirmado</option>
                         <option value="pagado">Pagado</option>
@@ -908,8 +968,9 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
                         <option value="cerrado">Cerrado</option>
                         <option value="cancelado">Cancelado</option>
                       </select>
+                      {order.status === "cancelado" && <small className="order-terminal-note">Cancelación definitiva</small>}
                     </td>
-                    <td><div className="admin-actions"><button type="button" onClick={() => setSelectedOrder(order)} aria-label={`Ver pedido ${order.id}`} title="Ver información del pedido"><Icon name="eye" /></button><button className="danger" type="button" onClick={() => removeOrder(order)} aria-label={`Eliminar pedido ${order.id}`} title="Eliminar pedido"><Icon name="trash" /></button></div></td>
+                    <td><div className="admin-actions"><button type="button" onClick={() => setSelectedOrder(order)} aria-label={`Ver pedido ${order.id}`} title="Ver información del pedido"><Icon name="eye" /></button><button className="danger" type="button" onClick={() => removeOrder(order)} aria-label={`Archivar pedido ${order.id}`} title="Archivar pedido"><Icon name="trash" /></button></div></td>
                   </tr>
                 ))}
                 {!filteredOrders.length && (
@@ -922,7 +983,7 @@ export function AdminPanel({ products, categories = [], collections = [], onProd
       </section>
       {editorOpen && <ProductEditor product={editorProduct} categoryOptions={categoryOptions} collectionOptions={collectionOptions} onSave={saveProduct} onClose={closeEditor} onUpload={uploadProductImage} />}
       {selectedOrder && <OrderDetails order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
-      {notice && <div className="toast"><Icon name="check" /> {notice}</div>}
+      {notice && <div className="toast" role="status"><Icon name="check" /> <span>{notice}</span>{catalogSyncFailed && <button className="toast-retry" type="button" onClick={retryCatalogSync}>Reintentar</button>}</div>}
     </main>
   );
 }

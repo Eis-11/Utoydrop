@@ -3,6 +3,7 @@ frontend/dist/
 coverage/
 .vite/
 .cache/
+.wrangler/
 tmp/
 temp/
 *.log
@@ -12,6 +13,8 @@ temp/
 *.swp
 .env
 .env.*
+.dev.vars
+.dev.vars.*
 !.env.example
 !**/.env.example
 backend/uploads/*

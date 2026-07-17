@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
 import { instagramDirectUrl } from "../config/business";
+import { DEFAULT_FEATURED_DROP } from "../services/featuredDrop";
+import { FeaturedDropVisual } from "./FeaturedDropVisual";
 import { Icon } from "./Icons";
-import { SafeImage } from "./SafeImage";
 
-export function Hero({ productCount = 0 }) {
+export function Hero({ productCount = 0, featuredDrop = DEFAULT_FEATURED_DROP, onFeaturedDropTarget }) {
   const visualRef = useRef(null);
 
   useEffect(() => {
@@ -70,12 +71,12 @@ export function Hero({ productCount = 0 }) {
       mobileQuery.removeEventListener("change", syncOrbit);
       document.removeEventListener("visibilitychange", syncOrbit);
     };
-  }, []);
+  }, [featuredDrop?.id]);
 
   return (
     <section className="hero" id="inicio">
       <div className="hero-noise" />
-      <div className="shell hero-grid">
+      <div className={`shell hero-grid ${featuredDrop ? "" : "hero-grid-without-drop"}`}>
         <div className="hero-copy">
           <div className="eyebrow"><span /> {productCount > 0 ? "Drop activo" : "Próximo drop"} <b>{productCount > 0 ? "Stock limitado" : "En preparación"}</b></div>
           <h1>EN GUSTOS<br /><em>SE ROMPEN<br />GÉNEROS.</em></h1>
@@ -100,18 +101,11 @@ export function Hero({ productCount = 0 }) {
           </div>
         </div>
 
-        <div ref={visualRef} className="hero-visual" aria-label="Identidad visual UTOY DROP">
-          <span className="hero-edition">LIMITED / 001</span>
-          <div className="hero-orbit orbit-one" />
-          <div className="hero-orbit orbit-two" />
-          <div className="hero-logo-card">
-            <div className="card-topline"><span>UTOY DROP</span><span>MX / 2026</span></div>
-            <SafeImage src="/img/logo-utoy-drop-hero.jpg" alt="Logo UTOY DROP" loading="eager" fetchPriority="high" />
-            <div className="card-bottomline"><span>Streetwear selected</span><b>Drop 01</b></div>
-          </div>
-          <div className="floating-label label-top"><Icon name="spark" size={16} /> Nuevo drop</div>
-          <div className="floating-label label-bottom">Oversize / Heavyweight</div>
-        </div>
+        <FeaturedDropVisual
+          drop={featuredDrop}
+          visualRef={visualRef}
+          onActivate={onFeaturedDropTarget}
+        />
       </div>
       <a className="hero-scroll" href="#catalogo"><span>Descubre el drop</span><i /></a>
       <div className="ticker" aria-hidden="true">

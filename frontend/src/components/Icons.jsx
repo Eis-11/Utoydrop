@@ -24,6 +24,7 @@ export function Icon({ name, size = 20 }) {
     logout: <><path d="M10 5H5v14h5M14 8l4 4-4 4m4-4H9" /></>,
     edit: <><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z" /><path d="m13.5 8 3 3" /></>,
     upload: <><path d="M12 16V4m0 0L7 9m5-5 5 5" /><path d="M5 15v5h14v-5" /></>,
+    copy: <><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></>,
   };
 
   return (

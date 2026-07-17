@@ -29,24 +29,17 @@ export async function apiRequest(path, options = {}) {
   }
 }
 
-export function getProducts() {
-  return apiRequest("/api/products", { cache: "no-store" });
+export function getCatalog() {
+  return apiRequest("/api/catalog");
 }
 
-export function getCategories() {
-  return apiRequest("/api/categories", { cache: "no-store" });
-}
-
-export function getCollections() {
-  return apiRequest("/api/collections", { cache: "no-store" });
-}
-
-export function createOrder(customer, items) {
+export function createOrder(customer, items, checkoutToken) {
   return apiRequest("/api/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       customer,
+      checkoutToken,
       items: items.map(({ id, size, color, quantity }) => ({ id, size, color, quantity })),
     }),
   });

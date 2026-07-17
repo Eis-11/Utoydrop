@@ -1,0 +1,77 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "utoy-drop-local",
+  "main": "backend/src/worker.js",
+  "compatibility_date": "2026-07-15",
+  "assets": {
+    "directory": "./frontend/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/uploads/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "utoy-drop-local",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "backend/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PRODUCT_IMAGES",
+      "bucket_name": "utoy-drop-product-images-local"
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "local",
+    "ALLOWED_ORIGINS": "http://localhost:8787,http://127.0.0.1:8787",
+    "ADMIN_SESSION_TTL_MINUTES": "5"
+  },
+  "env": {
+    "preview": {
+      "name": "utoy-drop-preview",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "utoy-drop-preview",
+          "database_id": "9f565db6-d9e1-49e9-9a50-dd95aed27517",
+          "migrations_dir": "backend/migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "PRODUCT_IMAGES",
+          "bucket_name": "utoy-drop-product-images-preview"
+        }
+      ],
+      "vars": {
+        "ENVIRONMENT": "preview",
+        "ALLOWED_ORIGINS": "https://utoy-drop-preview.utoydrop.workers.dev,http://localhost:8787,http://127.0.0.1:8787",
+        "ADMIN_SESSION_TTL_MINUTES": "5"
+      }
+    },
+    "production": {
+      "name": "utoy-drop",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "utoy-drop-production",
+          "database_id": "a67b2c63-3de9-4e67-b396-cb361f8b8c3f",
+          "migrations_dir": "backend/migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "PRODUCT_IMAGES",
+          "bucket_name": "utoy-drop-product-images-production"
+        }
+      ],
+      "vars": {
+        "ENVIRONMENT": "production",
+        "ALLOWED_ORIGINS": "https://utoy-drop.utoydrop.workers.dev",
+        "ADMIN_SESSION_TTL_MINUTES": "5"
+      }
+    }
+  }
+}
