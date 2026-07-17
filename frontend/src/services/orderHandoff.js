@@ -7,6 +7,8 @@ const moneyFormatter = new Intl.NumberFormat("es-MX", {
 export const COPIED_ORDER_MESSAGE = "Tu pedido fue copiado. En Instagram solo pégalo y envíalo.";
 export const MANUAL_HANDOFF_LABEL = "COPIAR Y ABRIR INSTAGRAM";
 export const CLIPBOARD_API_UNAVAILABLE = "API no disponible";
+export const CLIPBOARD_TIMEOUT_ERROR = "TimeoutError";
+const DEFERRED_CLIPBOARD_TIMEOUT_MS = 5000;
 
 function money(value) {
   return moneyFormatter.format(Number(value));
@@ -63,6 +65,7 @@ export function startDeferredClipboardWrite({
   clipboard = globalThis.navigator?.clipboard,
   ClipboardItemClass = globalThis.ClipboardItem,
   BlobClass = globalThis.Blob,
+  timeoutMs = DEFERRED_CLIPBOARD_TIMEOUT_MS,
 } = {}) {
   const supported = typeof clipboard?.write === "function"
     && typeof ClipboardItemClass === "function"
@@ -79,23 +82,37 @@ export function startDeferredClipboardWrite({
 
   let resolveContent;
   let rejectContent;
+  let markContentReady;
   let settled = false;
   const contentPromise = new Promise((resolve, reject) => {
     resolveContent = resolve;
     rejectContent = reject;
   });
   void contentPromise.catch(() => {});
+  const contentReady = new Promise((resolve) => { markContentReady = resolve; });
 
-  let completion;
+  let rawCompletion;
   try {
     const item = new ClipboardItemClass({ "text/plain": contentPromise });
-    completion = Promise.resolve(clipboard.write([item])).then(
+    rawCompletion = Promise.resolve(clipboard.write([item])).then(
       () => ({ ok: true, errorType: null }),
       (error) => ({ ok: false, errorType: classifyClipboardError(error) }),
     );
   } catch (error) {
-    completion = Promise.resolve({ ok: false, errorType: classifyClipboardError(error) });
+    rawCompletion = Promise.resolve({ ok: false, errorType: classifyClipboardError(error) });
   }
+
+  const completion = contentReady.then(() => new Promise((resolve) => {
+    let finished = false;
+    const finish = (result) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => finish({ ok: false, errorType: CLIPBOARD_TIMEOUT_ERROR }), timeoutMs);
+    rawCompletion.then(finish);
+  }));
 
   return {
     supported: true,
@@ -103,11 +120,13 @@ export function startDeferredClipboardWrite({
       if (settled) return;
       settled = true;
       resolveContent(new BlobClass([summary], { type: "text/plain" }));
+      markContentReady();
     },
     reject(error) {
       if (settled) return;
       settled = true;
       rejectContent(error);
+      markContentReady();
     },
     completion,
   };
@@ -120,10 +139,16 @@ export function beginDeferredOrderHandoff({
   clipboard = globalThis.navigator?.clipboard,
   ClipboardItemClass = globalThis.ClipboardItem,
   BlobClass = globalThis.Blob,
+  clipboardTimeoutMs = DEFERRED_CLIPBOARD_TIMEOUT_MS,
   openWindow = globalThis.window?.open?.bind(globalThis.window),
   logger = console.warn,
 }) {
-  const deferredClipboard = startDeferredClipboardWrite({ clipboard, ClipboardItemClass, BlobClass });
+  const deferredClipboard = startDeferredClipboardWrite({
+    clipboard,
+    ClipboardItemClass,
+    BlobClass,
+    timeoutMs: clipboardTimeoutMs,
+  });
   const reservedInstagramWindow = deferredClipboard.supported ? reserveInstagramWindow(openWindow) : null;
 
   if (reservedInstagramWindow) {
@@ -182,8 +207,8 @@ export function beginDeferredOrderHandoff({
       };
     } catch (error) {
       deferredClipboard.reject(error);
-      await deferredClipboard.completion;
       closeReservedWindow(reservedInstagramWindow);
+      await deferredClipboard.completion;
       throw error;
     }
   })();

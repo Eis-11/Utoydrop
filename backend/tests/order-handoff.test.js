@@ -4,6 +4,7 @@ import {
   buildOrderSummary,
   classifyClipboardError,
   CLIPBOARD_API_UNAVAILABLE,
+  CLIPBOARD_TIMEOUT_ERROR,
   COPIED_ORDER_MESSAGE,
   copyAndOpenInstagram,
   copyOrderSummary,
@@ -181,6 +182,27 @@ describe("entrega segura del pedido a Instagram", () => {
     expect(result).toMatchObject({ copied: false, clipboardErrorType: "NotAllowedError", instagramOpened: false });
     expect(logger).toHaveBeenCalledWith("UTOY clipboard", { type: "NotAllowedError" });
     expect(JSON.stringify(logger.mock.calls)).not.toContain(order.id);
+    expect(browserPopup.location.replace).not.toHaveBeenCalled();
+  });
+
+  test("sale al fallback si el navegador deja pendiente la escritura", async () => {
+    const logger = vi.fn();
+    const browserPopup = popup();
+    const handoff = beginDeferredOrderHandoff({
+      clipboard: { write: vi.fn(() => new Promise(() => {})) },
+      ClipboardItemClass: TestClipboardItem,
+      BlobClass: Blob,
+      clipboardTimeoutMs: 5,
+      openWindow: () => browserPopup,
+      instagramUrl: "https://www.instagram.com/direct/t/17844536325494661/",
+      createOrderRequest: () => Promise.resolve(order),
+      buildSummary: (createdOrder) => buildOrderSummary({ order: createdOrder }),
+      logger,
+    });
+
+    const result = await handoff.completion;
+    expect(result).toMatchObject({ copied: false, clipboardErrorType: CLIPBOARD_TIMEOUT_ERROR, manualRequired: true });
+    expect(browserPopup.close).toHaveBeenCalled();
     expect(browserPopup.location.replace).not.toHaveBeenCalled();
   });
 
