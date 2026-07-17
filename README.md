@@ -84,7 +84,7 @@ El frontend ya no consulta tres endpoints cada 30 segundos. Carga el catálogo u
 
 Los endpoints públicos anteriores (`/api/products`, `/api/categories` y `/api/collections`) se conservan por compatibilidad.
 
-`GET /api/featured-drop` entrega el único drop publicado con `ETag`. Los navegadores revalidan en cada carga (`max-age=0`) y la caché compartida puede conservarlo durante 30 segundos (`s-maxage=30`). Si D1 o la API fallan, React conserva la tarjeta original como fallback; una respuesta correcta con `drop: null` oculta la tarjeta.
+`GET /api/featured-drop` entrega el único drop publicado con `ETag`. La tienda solicita una respuesta fresca para reflejar publicaciones u ocultamientos inmediatamente; la caché compartida puede conservarlo durante 30 segundos (`s-maxage=30`) y otros clientes pueden revalidar con el ETag. Si D1 o la API fallan, React conserva la tarjeta original como fallback; una respuesta correcta con `drop: null` oculta la tarjeta.
 
 ## Drop destacado de la portada
 

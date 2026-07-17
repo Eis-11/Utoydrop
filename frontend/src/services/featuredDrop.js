@@ -40,7 +40,7 @@ export function normalizeFeaturedDropResponse(payload) {
 
 export async function getFeaturedDrop(options = {}) {
   return normalizeFeaturedDropResponse(await apiRequest("/api/featured-drop", {
-    cache: options.cache || "default",
+    cache: options.cache || "no-store",
   }));
 }
 
