@@ -52,7 +52,7 @@ async function saveProducts(products) {
   return cookie;
 }
 
-function orderPayload(items = [{ id: "test-product", size: "M", color: "Negro", quantity: 1 }]) {
+function orderPayload(items = [{ id: "test-product", size: "M", color: "Negro", quantity: 1 }], checkoutToken) {
   return {
     customer: {
       name: "Cliente de prueba",
@@ -63,11 +63,12 @@ function orderPayload(items = [{ id: "test-product", size: "M", color: "Negro", 
       notes: "",
     },
     items,
+    ...(checkoutToken ? { checkoutToken } : {}),
   };
 }
 
-async function placeOrder(items) {
-  return jsonRequest("/api/orders", "POST", orderPayload(items));
+async function placeOrder(items, checkoutToken) {
+  return jsonRequest("/api/orders", "POST", orderPayload(items, checkoutToken));
 }
 
 async function variantStocks() {
@@ -183,6 +184,42 @@ describe("UTOY DROP Worker", () => {
     expect(order.total).toBe(698);
     expect(order.inventoryState).toBe("reserved");
     expect(await variantStocks()).toEqual([0]);
+  });
+
+  test("un reintento con la misma clave devuelve el pedido existente sin descontar dos veces", async () => {
+    await saveProducts([product({ stock: 2 })]);
+    const checkoutToken = "checkout_retry_0123456789abcdef";
+    const ordersBefore = Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM orders").first()).count);
+    const first = await placeOrder(undefined, checkoutToken);
+    const second = await placeOrder(undefined, checkoutToken);
+    const firstOrder = await first.json();
+    const secondOrder = await second.json();
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(200);
+    expect(secondOrder.id).toBe(firstOrder.id);
+    expect(secondOrder.replayed).toBe(true);
+    expect(await variantStocks()).toEqual([1]);
+    expect(Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM orders").first()).count)).toBe(ordersBefore + 1);
+    const stored = await env.DB.prepare("SELECT checkout_token_hash FROM orders WHERE id = ?").bind(firstOrder.id).first();
+    expect(stored.checkout_token_hash).toHaveLength(64);
+    expect(stored.checkout_token_hash).not.toBe(checkoutToken);
+  });
+
+  test("un doble clic simultáneo crea una sola reserva para la misma clave", async () => {
+    await saveProducts([product({ stock: 2 })]);
+    const checkoutToken = "checkout_double_click_0123456789";
+    const movementsBefore = Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM inventory_movements WHERE kind = 'reserve'").first()).count);
+    const responses = await Promise.all([
+      placeOrder(undefined, checkoutToken),
+      placeOrder(undefined, checkoutToken),
+    ]);
+    const orders = await Promise.all(responses.map((response) => response.json()));
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 201]);
+    expect(new Set(orders.map((order) => order.id)).size).toBe(1);
+    expect(await variantStocks()).toEqual([1]);
+    expect(Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM inventory_movements WHERE kind = 'reserve'").first()).count)).toBe(movementsBefore + 1);
   });
 
   test("rechaza el pedido completo cuando una variante no tiene stock", async () => {

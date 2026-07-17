@@ -50,6 +50,8 @@ D1 ejecuta `D1Database.batch()` como transacción: una sentencia fallida reviert
 5. Un aborto revierte incluso descuentos ejecutados antes del fallo: nunca hay reserva parcial.
 6. La reserva incrementa la revisión del catálogo dentro de la misma transacción.
 
+Cada intento iniciado por el frontend incluye un token aleatorio. El Worker almacena solo `SHA-256(token)` en `orders.checkout_token_hash`, protegido por un índice único. Las solicitudes repetidas recuperan el mismo pedido; si dos solicitudes idénticas compiten, la restricción única revierte el segundo batch completo antes de responder con el registro ganador. Así se cubren doble clic, timeout y reintento sin doble reserva.
+
 Las escrituras administrativas incluyen la revisión que el panel leyó. Un trigger aborta el batch con `catalog_revision_conflict` cuando la revisión cambió; el panel recarga D1 y solicita revisar el cambio antes de guardar otra vez.
 
 ### Restauración

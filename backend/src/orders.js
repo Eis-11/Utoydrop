@@ -1,5 +1,5 @@
 import { getCatalog } from "./catalog.js";
-import { randomToken } from "./security.js";
+import { randomToken, sha256 } from "./security.js";
 import { HttpError, optionalText, requiredText } from "./validation.js";
 
 export const ORDER_STATUSES = new Set(["nuevo", "confirmado", "pagado", "enviado", "cerrado", "cancelado"]);
@@ -76,6 +76,11 @@ async function orderRecord(db, id) {
   return { row, items: items.results || [], order: rowToOrder(row, (items.results || []).map(itemFromRow)) };
 }
 
+async function orderRecordByCheckoutTokenHash(db, checkoutTokenHash) {
+  const row = await db.prepare("SELECT id FROM orders WHERE checkout_token_hash = ?").bind(checkoutTokenHash).first();
+  return row?.id ? orderRecord(db, row.id) : null;
+}
+
 function groupItemRows(items) {
   const grouped = new Map();
   for (const item of items) {
@@ -87,6 +92,16 @@ function groupItemRows(items) {
 }
 
 export async function createOrder(db, payload) {
+  const checkoutToken = optionalText(payload?.checkoutToken, 120);
+  if (checkoutToken && !/^[A-Za-z0-9_-]{20,120}$/.test(checkoutToken)) {
+    throw new HttpError(400, "El identificador del pedido no es válido.");
+  }
+  const checkoutTokenHash = checkoutToken ? await sha256(checkoutToken) : null;
+  if (checkoutTokenHash) {
+    const existing = await orderRecordByCheckoutTokenHash(db, checkoutTokenHash);
+    if (existing) return { ...existing.order, replayed: true };
+  }
+
   const requestedItems = Array.isArray(payload?.items) ? payload.items : [];
   if (!requestedItems.length) throw new HttpError(400, "El pedido está vacío.");
   if (requestedItems.length > 25) throw new HttpError(400, "El pedido contiene demasiadas variantes.");
@@ -158,9 +173,9 @@ export async function createOrder(db, payload) {
     INSERT INTO orders (
       id, created_at, updated_at, status, channel, customer_name, customer_instagram,
       customer_city, customer_delivery, customer_payment, customer_notes, total,
-      inventory_state, inventory_reserved_at
-    ) VALUES (?, ?, ?, 'nuevo', 'instagram', ?, ?, ?, ?, ?, ?, ?, 'reserved', ?)
-  `).bind(id, now, now, customer.name, customer.instagram, customer.city, customer.delivery, customer.payment, customer.notes, total, now)];
+      inventory_state, inventory_reserved_at, checkout_token_hash
+    ) VALUES (?, ?, ?, 'nuevo', 'instagram', ?, ?, ?, ?, ?, ?, ?, 'reserved', ?, ?)
+  `).bind(id, now, now, customer.name, customer.instagram, customer.city, customer.delivery, customer.payment, customer.notes, total, now, checkoutTokenHash)];
 
   for (const item of grouped.values()) {
     statements.push(db.prepare("UPDATE product_variants SET stock = stock - ?, updated_at = ? WHERE id = ?").bind(item.quantity, now, item.variantId));
@@ -186,13 +201,17 @@ export async function createOrder(db, payload) {
   try {
     await db.batch(statements);
   } catch (error) {
+    if (checkoutTokenHash) {
+      const existing = await orderRecordByCheckoutTokenHash(db, checkoutTokenHash);
+      if (existing) return { ...existing.order, replayed: true };
+    }
     const message = String(error?.message || error);
     if (message.includes("insufficient_stock") || message.includes("inactive_variant")) {
       throw new HttpError(409, "El inventario cambió mientras enviabas el pedido. No se reservó ninguna pieza; revisa las existencias.", "insufficient_stock");
     }
     throw error;
   }
-  return orderRecord(db, id).then((record) => record.order);
+  return orderRecord(db, id).then((record) => ({ ...record.order, replayed: false }));
 }
 
 export async function updateOrderStatus(db, id, nextStatus) {

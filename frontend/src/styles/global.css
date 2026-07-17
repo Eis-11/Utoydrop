@@ -422,6 +422,9 @@ button:disabled { cursor: not-allowed; }
 .checkout-handoff p strong { color: white; }
 .checkout-handoff small { color: #8f8f8f; font-size: .58rem; line-height: 1.55; text-align: center; }
 .checkout-finish { width: 100%; min-height: 44px; margin-top: 2px; }
+.checkout-copy-success { padding: 12px 14px; border: 1px solid rgba(216,255,73,.24); border-radius: 12px; background: rgba(216,255,73,.07); }
+.checkout-manual-copy { display: grid; gap: 7px; color: #aaa; font-size: .58rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.checkout-manual-copy textarea { width: 100%; min-height: 180px; resize: vertical; color: #eee; font: 500 .68rem/1.55 "Space Grotesk", sans-serif; letter-spacing: 0; text-transform: none; }
 .clear-cart { width: 100%; margin-top: 11px; border: 0; color: #666; background: transparent; font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
 .drawer-empty { display: grid; place-items: center; align-content: center; padding: 30px; text-align: center; }
 .drawer-empty svg { color: #666; }

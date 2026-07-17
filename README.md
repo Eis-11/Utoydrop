@@ -93,6 +93,10 @@ La reserva sucede al crear el pedido:
 4. Si una sola variante es insuficiente, D1 revierte pedido, artículos, movimientos y descuentos completos.
 5. `inventory_movements`, `inventory_state`, `inventory_reserved_at` e `inventory_restored_at` permiten auditar cada reserva o devolución.
 
+El navegador genera una clave criptográfica por intento de compra. D1 guarda únicamente su hash SHA-256 bajo un índice único. Un doble clic o un reintento tras perder la respuesta devuelve el pedido ya creado (`replayed: true`) sin insertar otro pedido ni descontar inventario por segunda vez.
+
+Después de crear el pedido, la tienda prepara un resumen con folio, variantes, cantidades, total y entrega, intenta copiarlo y abre el chat de `@utoy_drop`. Instagram nunca recibe credenciales ni texto mediante parámetros. Si el navegador bloquea el portapapeles o la ventana, el pedido permanece guardado y la pantalla conserva el resumen y las acciones manuales.
+
 Cada cambio de stock incrementa `catalog_state.revision`. El panel envía la revisión que leyó; si un pedido reservó inventario mientras el administrador editaba, D1 rechaza el guardado obsoleto y el panel recarga el catálogo. Así una edición administrativa nunca puede volver a introducir stock ya reservado.
 
 Reglas de restauración:

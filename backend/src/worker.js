@@ -54,7 +54,7 @@ app.post("/api/orders", async (c) => {
     ...order,
     instagram: { handle: "@utoy_drop", url: "https://www.instagram.com/utoy_drop/" },
     nextStep: "Copia el resumen y envíalo por Instagram para confirmar disponibilidad.",
-  }, 201);
+  }, order.replayed ? 200 : 201);
 });
 
 app.post("/api/admin/login", async (c) => {

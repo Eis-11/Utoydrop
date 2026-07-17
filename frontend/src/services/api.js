@@ -33,12 +33,13 @@ export function getCatalog() {
   return apiRequest("/api/catalog");
 }
 
-export function createOrder(customer, items) {
+export function createOrder(customer, items, checkoutToken) {
   return apiRequest("/api/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       customer,
+      checkoutToken,
       items: items.map(({ id, size, color, quantity }) => ({ id, size, color, quantity })),
     }),
   });
