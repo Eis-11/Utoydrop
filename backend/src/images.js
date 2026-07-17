@@ -56,3 +56,25 @@ export async function serveImage(c) {
   headers.set("X-Content-Type-Options", "nosniff");
   return new Response(object.body, { headers });
 }
+
+export async function deleteUnreferencedImage(c) {
+  const key = c.req.param("key");
+  if (!/^[A-Za-z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(key)) throw new HttpError(404, "Imagen no encontrada.");
+  const imageUrl = `/uploads/${key}`;
+  const references = await c.env.DB.batch([
+    c.env.DB.prepare("SELECT 1 AS found FROM products WHERE image = ? LIMIT 1").bind(imageUrl),
+    c.env.DB.prepare("SELECT 1 AS found FROM order_items WHERE image = ? LIMIT 1").bind(imageUrl),
+    c.env.DB.prepare("SELECT 1 AS found FROM featured_drops WHERE image_url = ? LIMIT 1").bind(imageUrl),
+  ]);
+  if (references.some((result) => result.results?.length)) {
+    throw new HttpError(
+      409,
+      "La imagen está siendo utilizada por productos, pedidos o el historial de drops.",
+      "image_in_use",
+    );
+  }
+  const object = await c.env.PRODUCT_IMAGES.head(key);
+  if (!object) throw new HttpError(404, "Imagen no encontrada.");
+  await c.env.PRODUCT_IMAGES.delete(key);
+  return { ok: true };
+}

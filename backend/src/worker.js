@@ -1,6 +1,13 @@
 import { Hono } from "hono";
 import { getCatalog, saveCatalog, saveCategories, saveCollections } from "./catalog.js";
-import { serveImage, uploadImage } from "./images.js";
+import {
+  getPublishedFeaturedDrop,
+  hideFeaturedDrop,
+  listFeaturedDrops,
+  publishFeaturedDrop,
+  saveFeaturedDropDraft,
+} from "./featuredDrops.js";
+import { deleteUnreferencedImage, serveImage, uploadImage } from "./images.js";
 import { archiveOrder, createOrder, listOrders, updateOrderStatus } from "./orders.js";
 import {
   enforceOrigin,
@@ -32,6 +39,17 @@ app.get("/api/catalog", async (c) => {
   const etag = `"${await sha256(body)}"`;
   c.header("ETag", etag);
   c.header("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
+  c.header("Vary", "Accept-Encoding");
+  const ifNoneMatch = c.req.header("if-none-match");
+  if (ifNoneMatch === "*" || ifNoneMatch?.replace(/^W\//, "") === etag) return c.body(null, 304);
+  return c.body(body, 200, { "Content-Type": "application/json; charset=UTF-8" });
+});
+
+app.get("/api/featured-drop", async (c) => {
+  const body = JSON.stringify({ drop: await getPublishedFeaturedDrop(c.env.DB) });
+  const etag = `"${await sha256(body)}"`;
+  c.header("ETag", etag);
+  c.header("Cache-Control", "public, max-age=0, s-maxage=30, stale-while-revalidate=60");
   c.header("Vary", "Accept-Encoding");
   const ifNoneMatch = c.req.header("if-none-match");
   if (ifNoneMatch === "*" || ifNoneMatch?.replace(/^W\//, "") === etag) return c.body(null, 304);
@@ -161,6 +179,72 @@ app.post("/api/admin/upload", requireAdmin, async (c) => {
     message: "Demasiadas cargas de imágenes. Espera unos minutos.",
   });
   return c.json(await uploadImage(c));
+});
+
+app.get("/api/admin/featured-drops", requireAdmin, async (c) => {
+  return c.json({
+    drops: await listFeaturedDrops(c.env.DB),
+    published: await getPublishedFeaturedDrop(c.env.DB),
+  });
+});
+
+app.post("/api/admin/featured-drops", requireAdmin, async (c) => {
+  await persistentRateLimit(c, {
+    scope: "admin_featured_drops",
+    windowMs: 60_000,
+    limit: 30,
+    message: "Demasiados cambios a la portada. Espera un momento.",
+  });
+  const drop = await saveFeaturedDropDraft(c.env.DB, await readJson(c.req.raw, 100_000));
+  return c.json({ drop, drops: await listFeaturedDrops(c.env.DB) }, 201);
+});
+
+app.put("/api/admin/featured-drops/:id", requireAdmin, async (c) => {
+  await persistentRateLimit(c, {
+    scope: "admin_featured_drops",
+    windowMs: 60_000,
+    limit: 30,
+    message: "Demasiados cambios a la portada. Espera un momento.",
+  });
+  const drop = await saveFeaturedDropDraft(
+    c.env.DB,
+    await readJson(c.req.raw, 100_000),
+    c.req.param("id"),
+  );
+  return c.json({ drop, drops: await listFeaturedDrops(c.env.DB) });
+});
+
+app.post("/api/admin/featured-drops/:id/publish", requireAdmin, async (c) => {
+  await persistentRateLimit(c, {
+    scope: "admin_featured_drops",
+    windowMs: 60_000,
+    limit: 30,
+    message: "Demasiados cambios a la portada. Espera un momento.",
+  });
+  const payload = await readJson(c.req.raw, 20_000);
+  const drop = await publishFeaturedDrop(c.env.DB, c.req.param("id"), payload.confirmReplace === true);
+  return c.json({ drop, drops: await listFeaturedDrops(c.env.DB), published: await getPublishedFeaturedDrop(c.env.DB) });
+});
+
+app.post("/api/admin/featured-drops/:id/hide", requireAdmin, async (c) => {
+  await persistentRateLimit(c, {
+    scope: "admin_featured_drops",
+    windowMs: 60_000,
+    limit: 30,
+    message: "Demasiados cambios a la portada. Espera un momento.",
+  });
+  const drop = await hideFeaturedDrop(c.env.DB, c.req.param("id"));
+  return c.json({ drop, drops: await listFeaturedDrops(c.env.DB), published: null });
+});
+
+app.delete("/api/admin/images/:key", requireAdmin, async (c) => {
+  await persistentRateLimit(c, {
+    scope: "admin_upload",
+    windowMs: 15 * 60_000,
+    limit: 30,
+    message: "Demasiados cambios de imágenes. Espera unos minutos.",
+  });
+  return c.json(await deleteUnreferencedImage(c));
 });
 
 app.get("/uploads/:key", serveImage);

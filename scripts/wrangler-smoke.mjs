@@ -31,13 +31,16 @@ try {
   await waitForWorker();
   const health = await fetch(`${baseUrl}/api/health`);
   const catalog = await fetch(`${baseUrl}/api/catalog`);
+  const featuredDrop = await fetch(`${baseUrl}/api/featured-drop`);
   const root = await fetch(`${baseUrl}/`);
   const spa = await fetch(`${baseUrl}/catalogo/ruta-interna`, { headers: { "Sec-Fetch-Mode": "navigate" } });
   if (!health.ok || !(await health.json()).ok) throw new Error("Falló /api/health.");
   if (!catalog.ok || !catalog.headers.get("etag")) throw new Error("Falló /api/catalog o su ETag.");
+  if (!featuredDrop.ok || !featuredDrop.headers.get("etag")) throw new Error("Falló /api/featured-drop o su ETag.");
+  if (!featuredDrop.headers.get("cache-control")?.includes("s-maxage=30")) throw new Error("Falló la caché corta del drop destacado.");
   if (!root.ok || !(await root.text()).includes('id="root"')) throw new Error("No se sirvió el frontend.");
   if (!spa.ok || !(await spa.text()).includes('id="root"')) throw new Error("Falló la recarga de una ruta SPA.");
-  console.log("Wrangler local: health, catálogo, assets y fallback SPA correctos.");
+  console.log("Wrangler local: health, catálogo, drop destacado, assets y fallback SPA correctos.");
 } finally {
   child.kill("SIGTERM");
   await Promise.race([

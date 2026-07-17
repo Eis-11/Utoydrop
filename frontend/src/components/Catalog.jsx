@@ -11,7 +11,7 @@ const sortOptions = [
 ];
 const PAGE_SIZE = 12;
 
-export function Catalog({ quickFilter, onQuickFilter, onDetails, favorites, onFavorite, onlyFavorites, onOnlyFavoritesChange, products, categories = [], collections = [] }) {
+export function Catalog({ quickFilter, onQuickFilter, onDetails, favorites, onFavorite, onlyFavorites, onOnlyFavoritesChange, products, categories = [], collections = [], requestedCollection }) {
   const [search, setSearch] = useState("");
   const [collection, setCollection] = useState("Colecciones");
   const [category, setCategory] = useState("Todos");
@@ -46,6 +46,13 @@ export function Catalog({ quickFilter, onQuickFilter, onDetails, favorites, onFa
   useEffect(() => {
     setVisibleLimit(PAGE_SIZE);
   }, [category, collection, favorites, onlyFavorites, products, quickFilter, search, sort]);
+
+  useEffect(() => {
+    if (!requestedCollection?.id || !availableCollections.includes(requestedCollection.id)) return;
+    setCollection(requestedCollection.id);
+    setCategory("Todos");
+    setSearch("");
+  }, [availableCollections, requestedCollection]);
 
   return (
     <section className="catalog section shell" id="catalogo">

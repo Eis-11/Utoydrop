@@ -34,8 +34,9 @@ Static Assets usa `single-page-application`, por lo que una navegación directa 
 | `admin_sessions` | Hash del token, actividad y expiración. |
 | `rate_limits` | Contadores persistentes por ámbito y cliente. |
 | `catalog_state` | Revisión optimista que evita sobrescribir reservas con una edición obsoleta. |
+| `featured_drops` | Borradores, publicación única, ocultamiento, destinos e historial de la tarjeta principal. |
 
-Los índices priorizan catálogo visible, variantes por producto, pedidos activos/estado, sesiones vencidas y ventanas de rate limiting.
+Los índices priorizan catálogo visible, variantes por producto, pedidos activos/estado, sesiones vencidas, ventanas de rate limiting e historial de portada. Un índice único parcial sobre `featured_drops.status = 'published'` impide dos destacados activos.
 
 ## Atomicidad e inventario
 
@@ -80,6 +81,7 @@ Las escrituras validan origen. Los contadores de login, pedidos, catálogo e im�
 ## Caché
 
 - `/api/catalog`: ETag, 30 segundos públicos y 60 segundos `stale-while-revalidate`.
+- `/api/featured-drop`: ETag, revalidación del navegador, 30 segundos en caché compartida y 60 segundos `stale-while-revalidate`.
 - `/uploads/*`: un año e immutable; los nombres son aleatorios y el contenido no cambia.
 - `/api/admin/*` y `/api/orders`: `private, no-store`.
 - Assets con hash Vite: un año e immutable.
@@ -91,7 +93,13 @@ Preview y producción tienen nombres de Worker, bases D1, buckets R2, orígenes 
 
 ## Conservación de imágenes R2
 
-La política de limpieza de objetos huérfanos está pendiente. No existe borrado automático: las imágenes referenciadas por productos, pedidos activos o pedidos archivados se conservan. Antes de implementar una limpieza se requiere un cálculo completo de referencias, ejecución simulada, periodo de gracia y auditoría de cada eliminación.
+La política de limpieza masiva de objetos huérfanos está pendiente. No existe borrado automático: las imágenes referenciadas por productos, pedidos activos, pedidos archivados o cualquier versión de `featured_drops` se conservan. El borrado administrativo unitario consulta las tres fuentes de referencia antes de eliminar de R2. Antes de implementar una limpieza masiva se requiere un cálculo completo de referencias, ejecución simulada, periodo de gracia y auditoría de cada eliminación.
+
+## Portada versionada
+
+El administrador guarda cambios como `draft`. Publicar ejecuta un batch D1 que pasa el activo anterior a `archived` y el seleccionado a `published`; el índice único ofrece una segunda defensa ante concurrencia. Ocultar cambia el activo a `hidden`. Ninguna de estas operaciones elimina filas ni objetos R2, por lo que cualquier versión anterior puede recuperarse.
+
+La API pública solo devuelve la fila `published`. Los destinos se resuelven nuevamente contra productos visibles o colecciones existentes; si dejaron de existir, la tarjeta conserva su presentación pero no genera un enlace roto. React usa la tarjeta original incluida en el bundle únicamente cuando D1 o la API fallan. Una respuesta válida sin publicado oculta la tarjeta.
 
 ## Capacidad gratuita
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { synchronizeCatalogAfterOrderMutation } from "../services/catalogState";
 import { variantKey } from "../utils/inventory";
+import { FeaturedDropAdmin } from "./FeaturedDropAdmin";
 import { Icon } from "./Icons";
 import { SafeImage } from "./SafeImage";
 
@@ -422,7 +423,7 @@ function OrderDetails({ order, onClose }) {
   );
 }
 
-export function AdminPanel({ products, categories = [], collections = [], catalogRevision = 0, onProductsChange, onCategoriesChange, onCollectionsChange, onRevisionChange, onCatalogRefresh }) {
+export function AdminPanel({ products, categories = [], collections = [], catalogRevision = 0, onProductsChange, onCategoriesChange, onCollectionsChange, onRevisionChange, onCatalogRefresh, onFeaturedDropChange }) {
   const [authenticated, setAuthenticated] = useState(null);
   const [loginNotice, setLoginNotice] = useState("");
   const [query, setQuery] = useState("");
@@ -819,6 +820,7 @@ export function AdminPanel({ products, categories = [], collections = [], catalo
         <nav>
           <button className={activeView === "overview" ? "active" : ""} type="button" onClick={() => setActiveView("overview")}><Icon name="grid" /> Resumen</button>
           <button className={activeView === "products" ? "active" : ""} type="button" onClick={() => setActiveView("products")}><Icon name="bag" /> Productos</button>
+          <button className={activeView === "featured-drop" ? "active" : ""} type="button" onClick={() => setActiveView("featured-drop")}><Icon name="spark" /> Portada</button>
           <button className={activeView === "orders" ? "active" : ""} type="button" onClick={() => setActiveView("orders")}><Icon name="check" /> Pedidos</button>
           <a href="#inicio"><Icon name="eye" /> Ver tienda</a>
         </nav>
@@ -826,7 +828,7 @@ export function AdminPanel({ products, categories = [], collections = [], catalo
       </aside>
       <section className="admin-main">
         <header className="admin-topbar">
-          <div><span className="admin-kicker">Control central</span><h1>{activeView === "overview" ? "Resumen operativo" : activeView === "products" ? "Catálogo" : "Pedidos"}</h1></div>
+          <div><span className="admin-kicker">Control central</span><h1>{activeView === "overview" ? "Resumen operativo" : activeView === "products" ? "Catálogo" : activeView === "featured-drop" ? "Drop destacado" : "Pedidos"}</h1></div>
           <div className="admin-top-actions">
             <span className="admin-live-status"><i /> Pedidos en vivo</span>
             <button className="button button-ghost" type="button" onClick={loadOrders}>{ordersLoading ? "Actualizando..." : "Actualizar"}</button>
@@ -851,6 +853,7 @@ export function AdminPanel({ products, categories = [], collections = [], catalo
                 <button className="button" type="button" onClick={() => { setEditorProduct(undefined); setEditorOpen(true); }}><Icon name="plus" /> Nuevo producto</button>
                 <button className="button button-ghost" type="button" onClick={() => setActiveView("orders")}><Icon name="check" /> Revisar pedidos</button>
                 <button className="button button-ghost" type="button" onClick={() => setActiveView("products")}><Icon name="bag" /> Editar catálogo</button>
+                <button className="button button-ghost" type="button" onClick={() => setActiveView("featured-drop")}><Icon name="spark" /> Editar portada</button>
               </div>
             </article>
             <article className="admin-panel-block">
@@ -922,6 +925,15 @@ export function AdminPanel({ products, categories = [], collections = [], catalo
           </div>
           {productPageCount > 1 && <div className="admin-pagination"><button type="button" disabled={productPage === 1} onClick={() => setProductPage((page) => page - 1)}>Anterior</button><span>{productPage} / {productPageCount}</span><button type="button" disabled={productPage === productPageCount} onClick={() => setProductPage((page) => page + 1)}>Siguiente</button></div>}
         </section>}
+        {activeView === "featured-drop" && (
+          <FeaturedDropAdmin
+            products={products}
+            collections={collections}
+            onUpload={uploadProductImage}
+            onUnauthorized={() => setAuthenticated(false)}
+            onPublishedChange={onFeaturedDropChange}
+          />
+        )}
         {activeView === "orders" && <section className="admin-catalog admin-orders">
           <div className="admin-catalog-head">
             <div><h2>Pedidos recientes</h2><p>Consulta solicitudes enviadas desde el carrito y actualiza su estado.</p></div>

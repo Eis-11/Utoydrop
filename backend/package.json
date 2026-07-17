@@ -6,7 +6,7 @@
   "main": "src/worker.js",
   "scripts": {
     "test": "vitest run",
-    "check": "node --check src/worker.js && node --check src/catalog.js && node --check src/orders.js && node --check src/security.js && node --check src/validation.js"
+    "check": "node --check src/worker.js && node --check src/catalog.js && node --check src/featuredDrops.js && node --check src/images.js && node --check src/orders.js && node --check src/security.js && node --check src/validation.js"
   },
   "dependencies": {
     "hono": "4.12.30"

@@ -21,6 +21,7 @@ backend/
   src/
     worker.js              rutas del Worker
     catalog.js             lectura y escritura del catálogo D1
+    featuredDrops.js       historial y publicación atómica de la portada
     orders.js              pedidos, estados e inventario atómico
     images.js              validación y almacenamiento R2
     security.js            sesiones, cookies, CSP, origen y rate limiting
@@ -83,6 +84,23 @@ El frontend ya no consulta tres endpoints cada 30 segundos. Carga el catálogo u
 
 Los endpoints públicos anteriores (`/api/products`, `/api/categories` y `/api/collections`) se conservan por compatibilidad.
 
+`GET /api/featured-drop` entrega el único drop publicado con `ETag`. Los navegadores revalidan en cada carga (`max-age=0`) y la caché compartida puede conservarlo durante 30 segundos (`s-maxage=30`). Si D1 o la API fallan, React conserva la tarjeta original como fallback; una respuesta correcta con `drop: null` oculta la tarjeta.
+
+## Drop destacado de la portada
+
+El panel incluye la sección **Portada**:
+
+- Guarda borradores sin alterar la tienda.
+- Publica una versión y archiva atómicamente al destacado anterior.
+- Oculta el destacado sin borrar su historial.
+- Permite seleccionar y volver a publicar una versión anterior.
+- Mantiene imagen, texto alternativo, etiquetas y destino como campos HTML independientes y validados.
+- Acepta destinos de producto o colección existentes; sin destino la tarjeta continúa como elemento visual.
+
+La migración `0005_featured_drops.sql` crea `featured_drops`, un índice de historial y un índice único parcial que impide dos filas con estado `published`. La publicación usa `D1Database.batch()`, por lo que el reemplazo del activo y la publicación de la nueva versión se confirman o revierten juntos.
+
+Las imágenes se cargan en `PRODUCT_IMAGES` con la validación real existente para JPG, PNG y WebP. No hay borrado automático. `DELETE /api/admin/images/:key` solo elimina un objeto cuando D1 confirma que no está referenciado por productos, artículos de pedidos ni ninguna versión del historial de drops.
+
 ## Política de pedidos e inventario
 
 La reserva sucede al crear el pedido:
@@ -96,6 +114,8 @@ La reserva sucede al crear el pedido:
 El navegador genera una clave criptográfica por intento de compra. D1 guarda únicamente su hash SHA-256 bajo un índice único. Un doble clic o un reintento tras perder la respuesta devuelve el pedido ya creado (`replayed: true`) sin insertar otro pedido ni descontar inventario por segunda vez.
 
 Durante el clic original, la tienda inicia `navigator.clipboard.write()` con un `ClipboardItem` cuyo `Blob` queda pendiente. Solo después de que D1 crea el pedido se resuelve ese contenido con el folio real, variantes, cantidades, total y entrega. Instagram se abre únicamente cuando el navegador confirma la copia. Si `ClipboardItem` no está disponible o la escritura falla, el pedido permanece guardado y aparece `COPIAR Y ABRIR INSTAGRAM`, además del resumen en texto como último respaldo. Instagram nunca recibe credenciales ni texto mediante parámetros.
+
+**Pendiente de validación manual:** la copia automática todavía debe comprobarse satisfactoriamente en Brave/Chrome real y en un teléfono. Las pruebas automatizadas y el fallback seguro no se consideran confirmación de que el portapapeles automático ya funcione en esos navegadores.
 
 Cada cambio de stock incrementa `catalog_state.revision`. El panel envía la revisión que leyó; si un pedido reservó inventario mientras el administrador editaba, D1 rechaza el guardado obsoleto y el panel recarga el catálogo. Así una edición administrativa nunca puede volver a introducir stock ya reservado.
 
@@ -180,7 +200,7 @@ El origen exacto de preview ya está registrado como `https://utoy-drop-preview.
 
 ### Política pendiente para imágenes R2 huérfanas
 
-La limpieza automática de imágenes R2 huérfanas queda pendiente. Hasta definirla y probarla, la limpieza debe ser manual y conservadora: nunca se elimina una imagen referenciada por un producto, un pedido activo o un pedido archivado. Una futura tarea deberá calcular referencias, generar un reporte en modo simulación, conservar un periodo de gracia y dejar un registro auditable antes de eliminar objetos.
+La limpieza automática de imágenes R2 huérfanas queda pendiente. Hasta definirla y probarla, la limpieza debe ser manual y conservadora: nunca se elimina una imagen referenciada por un producto, un pedido activo, un pedido archivado o el historial de drops destacados. El endpoint administrativo de borrado comprueba estas referencias; una futura limpieza masiva deberá además generar un reporte en modo simulación, conservar un periodo de gracia y dejar un registro auditable.
 
 ### 6. Aplicar migraciones
 

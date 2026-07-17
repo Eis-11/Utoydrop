@@ -16,6 +16,7 @@ import { useLocalStorage } from "./hooks/useLocalStorage";
 import { products as initialProducts } from "./data/products";
 import { getCatalog } from "./services/api";
 import { applyCatalogSnapshot, createCatalogRefreshCoordinator } from "./services/catalogState";
+import { DEFAULT_FEATURED_DROP, loadFeaturedDrop } from "./services/featuredDrop";
 
 const initialCategories = [...new Set(initialProducts.map((product) => product.category).filter(Boolean))].sort();
 const initialCollections = [...new Set(initialProducts.map((product) => product.collection).filter(Boolean))].sort();
@@ -35,6 +36,8 @@ export default function App() {
   const [catalogCategories, setCatalogCategories] = useState(initialCategories);
   const [catalogCollections, setCatalogCollections] = useState(initialCollections);
   const [catalogRevision, setCatalogRevision] = useState(0);
+  const [featuredDrop, setFeaturedDrop] = useState(DEFAULT_FEATURED_DROP);
+  const [requestedCollection, setRequestedCollection] = useState(null);
   const catalogRefreshRef = useRef(null);
   if (!catalogRefreshRef.current) {
     catalogRefreshRef.current = createCatalogRefreshCoordinator(getCatalog, (catalog) => applyCatalogSnapshot(catalog, {
@@ -87,6 +90,14 @@ export default function App() {
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [refreshCatalog]);
+
+  useEffect(() => {
+    let active = true;
+    loadFeaturedDrop().then(({ drop }) => {
+      if (active) setFeaturedDrop(drop);
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const mobileQuery = window.matchMedia("(max-width: 780px)");
@@ -195,9 +206,24 @@ export default function App() {
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  function handleFeaturedDropTarget(target) {
+    if (target?.type === "product") {
+      const product = catalogProducts.find((item) => String(item.id) === String(target.id) && item.active !== false);
+      if (product) setSelectedProduct(product);
+      return;
+    }
+    if (target?.type === "collection") {
+      setQuickFilter("Todo");
+      setOnlyFavorites(false);
+      setRequestedCollection({ id: target.id, requestedAt: Date.now() });
+      window.history.replaceState(null, "", "#catalogo");
+      scrollToSection("#catalogo");
+    }
+  }
+
   const adminRoute = route === "#admin";
   if (adminRoute) {
-    return <AdminPanel products={catalogProducts} categories={catalogCategories} collections={catalogCollections} catalogRevision={catalogRevision} onProductsChange={setCatalogProducts} onCategoriesChange={setCatalogCategories} onCollectionsChange={setCatalogCollections} onRevisionChange={setCatalogRevision} onCatalogRefresh={refreshCatalog} />;
+    return <AdminPanel products={catalogProducts} categories={catalogCategories} collections={catalogCollections} catalogRevision={catalogRevision} onProductsChange={setCatalogProducts} onCategoriesChange={setCatalogCategories} onCollectionsChange={setCatalogCollections} onRevisionChange={setCatalogRevision} onCatalogRefresh={refreshCatalog} onFeaturedDropChange={setFeaturedDrop} />;
   }
 
   const activeProducts = catalogProducts.filter((product) => product.active !== false);
@@ -206,7 +232,11 @@ export default function App() {
     <>
       <Header onNavigate={handleHeaderNavigation} onFavoritesOpen={showFavoritesFromHeader} cartCount={cartCount} favoriteCount={favorites.length} onCartOpen={() => setCartOpen(true)} />
       <main>
-        <Hero productCount={activeProducts.length} />
+        <Hero
+          productCount={activeProducts.length}
+          featuredDrop={featuredDrop}
+          onFeaturedDropTarget={handleFeaturedDropTarget}
+        />
         <StoreHighlights products={activeProducts} onDetails={setSelectedProduct} />
         <Catalog
           quickFilter={quickFilter}
@@ -219,6 +249,7 @@ export default function App() {
           products={activeProducts}
           categories={catalogCategories}
           collections={catalogCollections}
+          requestedCollection={requestedCollection}
         />
         <TrustGuide />
         <About />
