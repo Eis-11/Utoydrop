@@ -57,7 +57,7 @@
         {
           "binding": "DB",
           "database_name": "utoy-drop-production",
-          "database_id": "11111111-1111-1111-1111-111111111111",
+          "database_id": "a67b2c63-3de9-4e67-b396-cb361f8b8c3f",
           "migrations_dir": "backend/migrations"
         }
       ],
@@ -69,7 +69,7 @@
       ],
       "vars": {
         "ENVIRONMENT": "production",
-        "ALLOWED_ORIGINS": "https://REPLACE_WITH_PRODUCTION_DOMAIN",
+        "ALLOWED_ORIGINS": "https://utoy-drop.utoydrop.workers.dev",
         "ADMIN_SESSION_TTL_MINUTES": "5"
       }
     }
